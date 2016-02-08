@@ -196,6 +196,7 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 换行或者空行会依据上文的完整性推导为分号. 推导规则:
 
+	字符串表达式有独立的规则.
 	如果上文至此换行可形成完整的语句, 把换行当做分号.
 
 *注意: 不良的换行可能引起下文非法, 甚至被当做注释.*
@@ -255,18 +256,92 @@ if a and, x or (b or c) and (d or e) [
 
 运算符只能出现在表达式中, 下表按优先级从高到低排列.
 
-| 运算符                    | 解释           |
+| 运算符                    | 解释			|
 |--------------------------|----------------|
-| $                        |仅用于模板字符串  |
-| &,\|,~,xo                |位与,或,反,异或   |
-| <<,>>,mod,mul,%,*,/      |                |
-| add,+,-                  |                | 
-| to                       |数值至数值       |
-| ==,<=,>=,>,<             |比较运算         |
-| not,in,is,has            |                |
-| and                      |逻辑与           |
-| or                       |逻辑或           |
+| $                        |模板取值是独立运算	|
+| ~                        |一元右结合位反		|
+| &,\|,xor                 |位与,或,异或		|
+| mul,*,/,mod,%,<<,>>      |乘除,整数取模,位移	|
+| add,+,-                  |数值加减,字符串连接| 
+| to                       |数值至数值		|
+| ==,!=,<=,>=,>,<          |比较运算			|
+| is,isnot,has             |结果是布尔类型		|
+| not                      |一元右结合非		|
+| and                      |与				|
+| or                       |或				|
 
+模板取值运算符 '$' 是 Z 语言特征,  不能归类到一元运算符.
+
+```
+运算符 mul 等价于四则乘法运算符 '*'. 
+运算符 add 等价于四则加法运算符 '+'. 
+加减乘除四则运算要求运算子类型一致且结果类型不变
+
+-3 / 2 -> -1 整除
+0.1*0.1 isnot 0.01 浮点数精度造成的
+
+取模运算符 mod 的运算子为同类型整型
+a mod b 等价于 a - (a/b)*b
+分步运算举例
+
+7 mod 4
+7 - (7 / 4)*4
+7 - 4
+3
+
+-7 mod 4
+-7 - (-7 / 4)*4
+-7 - (-1)*4
+-7 - (-4)
+-7 + 4
+-3
+
+7 mod -4
+7 - (7 / -4)*(-4)
+7 + (-1)*4
+7 + (-4)
+7 - 4
+3
+
+-7 mod -4
+-7 - (-7 / -4)*(-4)
+-7 + 1*4
+-3
+
+取模运算符 '%' 运算 a % b 时先对取绝对值, 等价 |a| mod |b|.
+```
+
+二元运算符 'is', 'isnot' 有多种情况.
+
+```
+同类型时(null 值会依据右侧算子类型自动推导出同类型值)
+a is b 等价 a == b
+a isnot b 等价 a != b
+int(0) is null 等价 int(0) == 0
+'string' is null 等价 'string' == '' 
+
+数组, 映射和自定义类型没有被赋值时值为 null, 所以
+type empty =[]
+type T=[
+	int x
+]
+
+var []int x,
+	y = []int{0}
+
+var empty e,
+	T t,
+	T t1 = T{x:1}
+
+x is null		结果为真
+y is null		结果为假
+y isnot null	结果为真
+e is null		结果永远为真, 因为无法对 e 的属性赋值
+t is null		结果为真
+t1 is null		结果为假
+```
+
+Z 中运算符 'not', 'and', 'or' 是语法糖, 参见过程和分支语句.
 
 #类型
 
@@ -366,7 +441,7 @@ var string (
 
 	c = hello() word() 行内字符串表达式值连接无需运算符
 
-	d = hello()word() 紧凑书写也可以
+	d = hello()word() 支持紧凑书写
 
 	e = hello() -
 		' word' 前行尾部用 '-' 避免括号终结歧义, 否则就成注释了.
@@ -377,7 +452,8 @@ var string (
 )
 ```
 
-字符串连接操作使用运算符 '-', 因为 '+' 需要 shift 按键, '-' 号更便于输入.
+字符 '+' 或者 '-' 都是字符串连接符, '-' 号更便于输入.
+同一行内结果为字符串的表达式, 或引号包裹的连续多行字符串连接可省略 '+' , '-' 号.
 
 双引号字符串具有简单的模板功能, 双引号字符串也称作模板字符串.
 
@@ -427,6 +503,58 @@ var datetime(
 	now = 20160204T214900 // 简化时间格式无 ':' 号
 )
 ```
+
+##数组
+
+数组是预定义类型, 用前缀的方括号表示, 没有单独的保留字标识符.
+
+```
+var []int a
+var []int (
+	c
+	d = []int{ 赋初值仍然要写完整类型
+		1,2,3,
+		call() 使用表达式运算结果
+	}
+)
+
+访问数组元素
+var int e = d[0] 支持直接访问已有的变量
+```
+
+##映射
+
+映射具有 key-value 结构, key 和 value 的具体类型有使用者定以.
+
+```
+map 赋值使用 JSON 风格
+var map[string]int m = map[string]int{
+	'age': 13,
+	"height": 156 
+}
+
+key 和 value 可以是任意类型, 甚至可以使用 type
+var map[type]string types = map[type]string{
+	string: 'string',
+	int: 'integer'
+}
+
+var map[type]type assoc = map[type]type{
+	string: types,
+	int: float
+}
+
+访问映射
+var int e = m['age'] 支持直接访问已有的变量
+var type t= m[string]
+``` 
+
+Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别的,
+在 Z 中 type 的类型就是 type, 可以用于过程的参数类型.
+
+##type
+
+保留字 type 是个超级类型, 
 
 #表达式
 
@@ -484,12 +612,6 @@ proc sum int x,y,out int =[
 proc multiByteFriendly out bool =[
 	使用多字节字符写注释....
 	return true 就是这么直接
-]
-
-type hello is example for Z =[
-	' is example for Z ' 是个备注, 被忽略了.
-	类型声明语法很规律, '=' 的存在为解析器提供了识别边界.
-	string word
 ]
 ```
 
@@ -674,14 +796,65 @@ proc call out string =[ 举例说明调用形式
 	var string s = 'word'
 	return toString() - toString('word')
 ]
+
+proc fn =[
+	var func f out string 声明函数变量必须用 func
+	var func c = call 声明并赋值可以省略函数的参数声明
+]
 ```
 
-正如你看到的, 
+如果一个 block 只用 func 声明了过程, 那么会产生如下情况:
 
-1. 调用过程不必传递所有参数, 因为参数都有零值或缺省值, 有可能是 null
-2. out 不只是表示输出, 依然可以作为输入参数 
+```
+pub func fn // fn 被外部实现, 或在参数中作为类型约束
+
+func call   // call 来自外部连接库, 或被 block 内的过程输出
+```
+
+关于过程的参数:
+
+1. 参数必须具有类型和名字
+2. 参数都有零值或缺省值,  null 是通用的零值.
+3. 调用过程不必传递所有参数.
+4. 从第一个出现的 out 修饰开始, 表示后续参数具有输入输出双向性.
+5. 保留字 result 替代输出参数,  它是个语法糖没有类型, 不能作为参数传递.
+6. 保留字 return 也是个语法糖, 等同输出参数再 end
+
+
+```
+proc one out int x =[
+	result = 1 单个输出可用 result 替代
+	return 2 只有一个输出参数的话, 可以用 return
+]
+
+proc fn out int x,y =[
+	result.x = 1
+	result.y = 2
+	可把 result 当做对象用
+	result =[
+		x = 1,
+		y = 2
+	]
+	也可以用 JSON 风格
+	result ={
+		x:1,
+		y:2
+	}
+	end 保留字 end 指示结束过程, 可以省略它
+
+	多输出参数也可以使用 return 语法糖
+	return {
+		x:1,
+		y:2
+	}
+]
+```
+
 
 ##类型声明
+
+使用保留字 type 声明新类型.
+Z 中没有别名, 声明类型就是定义类型成员.
 
 ```
 type empty =[] 无属性类型
@@ -698,11 +871,11 @@ type apple ={
 
 成员方法是个过程, 这种过程可以叫做 '实例方法'
 proc fruit.isSweet out bool =[
-	return self.flavors not null and
+	return self.flavors isnot null and
 		self.flavors.has('sweet')
 ]
 
-匿名复合, 下列中的 path 继承了 string 所有导出成员
+匿名复合, 下例中的 path 导出了类型 string 所有的导出成员.
 type path =[
 	pub use string
 ]
@@ -762,7 +935,7 @@ proc node.fn =[
 
 ##分支语句
 
-有两种语法结构
+有两个标识符可选, 'if' 和 'switch'.
 
 ```
 if expr {
@@ -772,30 +945,129 @@ if expr {
 
 if expr {
 	// do something
-} else if expr1 { // if else if 结构
+} else if expr1 {
 }
 
-if expr 
+switch expr {
 case a:
-	// do something
-	break
-case b, 用逗号替代冒号更便于输入
-else {
+	if something {
+		break
+	}
+	// do ...
+case b,c: 可选多值匹配
+default: {
 }
+
 前面的 break 会跳转到这里
 ```
 
+分支语句中的 break 只能存在于 case 中.
+每个 case 语句块结束的位置总是隐含一条 break.
+
+
+##循环语句
+
+循环语句由保留字 for 开始, 有多种语法.
+
+```
+一段式循环条件
+for condExpr {
+	if expr1 {
+		continue
+	}
+
+	if expr2 {
+		break
+	}
+}
+
+三段式循环条件
+for doSomething; condExpr; doSomethingBeforeNextLoop {
+}
+常见的
+for var i = 0; i < 10; i++{
+}
+
+数组
+for array as index {
+	// 对于数组, 下标 index 是从 0 开始的正整数
+}
+
+for array as index item {
+	// item 为 array[index]
+} 
+
+立即数组
+for []int{1..10} as index item {
+	echo index, item
+} 
+
+映射
+for maps as key {
+}
+
+for maps as key val {
+}
+
+立即映射
+for map[string]int{'a':1,'b':2} as key val {
+}
+
+遍历自定义类型成员, 以前文 fruit 为例
+
+for fruit as name typ {
+}
+
+var fruit f=fruit[color='red']
+for f as name typ {
+	事实上是对 f 的类型成员进行枚举
+	这意味着 Z 中没有泛型, 运行期所有的值都是有类型的.
+	但是 Z 的 map 为类似问题提供解决途径
+}
+```
+
+循环, 分支与 is, isnot 运算符的使用:
+
+```
+var map[type]string types = map[type]string{
+	string: 'string',
+	int: 'integer'
+}
+
+var map[type]type assoc = map[type]type{
+	string: types,
+	int: float
+}
+
+proc fn =[
+	for assoc as t val {
+		if t is int {
+			doSomething()
+			continue
+		}
+		
+		if t has string and t[string] isnot null {
+			break
+		}
+		
+		var maps = types(val[string]) 强制类型转换
+		
+		switch  {
+		case string:
+			
+		}
+	}
+]
+```
 
 
 ```
 `
-break
-case continue
-def defer
-else end
+continue
+defer
 for from func
 go goto
-if in iota is
+iota is isnot
 not null
 of or out
 proc pub
@@ -827,7 +1099,7 @@ else end
 for from func
 go goto
 has
-if in is
+if is isnot
 mul
 not null
 or out
