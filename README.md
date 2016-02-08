@@ -34,7 +34,7 @@ proc hello string word =[
 ]
 ```
 
-Z 支持用输入方括号替代圆括号和花括号, 因为方括号不用 shift 键, 更便于输入. Z 提供的格式化工具会进行常规习惯转换. 
+Z 支持用输入方括号替代圆括号和花括号, 因为方括号不用 shift 键, 更便于输入. 
 
 	Z 没有代码风格规范, 书写者自己说了算. 代码规范令人厌恶.
 
@@ -119,7 +119,7 @@ rep
 
 	目录的层级关系只是存储的组织形式, package 或者 block 都是平级的, 没有层级归属. 
 
-'block.json' 的采用语义化属性名, 通常这无需特别解释, 看到名称就知道作用.
+'block.json' 采用语义化属性名, 通常这无需特别解释, 看到名称就知道作用.
 
 
 ```JSON
@@ -160,7 +160,7 @@ Z 中它们是互斥的. Z 是这样确定语素的:
 
 #字面值
 
-字面值是就是一段无类型的文本. 它的语义类型是在使用时判定的, 有可能被判定为非法值.
+字面值是就是一段文本. 它的语义类型是在使用时判定的, 有可能被判定为非法值.
 
 ##预声明字面值
 
@@ -169,18 +169,20 @@ Z 中它们是互斥的. Z 是这样确定语素的:
 null      无值, 零值
 false     假
 true      真
-NaN       浮点类型 非数
-infinite  浮点类型 无穷大
+NaN       非数
+infinite  无穷大
 `
 ```
 
-##格式字面值
+行首的空格, tab 缩进以及换行符 CR, LF 其实也是字面值.
 
-包括  string, datetime, float, int 等格式的文本, 具体格式见下文类型描述.
+##常量字面值
+
+详见下文常量类型描述.
 
 ##占位文本
 
-Z 不能识别的文本, 而又不确定非法时都会被当做占位文本处理.
+Z 不能识别语义的文本被当做占位文本处理.
 
 #标识符
 
@@ -190,9 +192,9 @@ Z 不能识别的文本, 而又不确定非法时都会被当做占位文本处�
 
 ##分号
 
-分号 ";" 用来表示语句的结束边界. 源码经过格式美化后分号会被省略. 除非代码 minify 到一行. 
+分号 ";" 用来指示语句的结束边界. 源码经过格式美化后分号会被省略. 除非代码 minify 到一行. 
 
-换行或者空行会依据上文的完整性推导为分号终结符. 推导规则:
+换行或者空行会依据上文的完整性推导为分号. 推导规则:
 
 	如果上文至此换行可形成完整的语句, 把换行当做分号.
 
@@ -207,7 +209,7 @@ Z 不能识别的文本, 而又不确定非法时都会被当做占位文本处�
 	[] 通用定界
 
 
-方括号 '[]' 更便于输入, 输入时可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
+方括号 '[]' 更便于输入, 可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
 
 
 ##逗号
@@ -244,9 +246,8 @@ if a and (x or ((b or c) and (d or e))) [
 使用逗号分组无法消除所有分组括号
 if a and, x or (b or c) and (d or e) [
 ]
-下面的写法 Z 不能识别
-if a and, x or, b or c, and, d or e [
-]
+
+不能识别这种 if a and, x or, b or c, and, d or e
 
 ```
 
@@ -269,7 +270,7 @@ if a and, x or, b or c, and, d or e [
 
 #类型
 
-类型名是个标识符, 预声明类型的标识符是保留字, 所有内置类型实例都是对象, 拥有预定义方法, 详见相关手册.
+类型名是个标识符. 预声明类型标识符是保留字.
 
 ##布尔
 
@@ -277,9 +278,9 @@ bool 的字面值为 true 或者 false.
 
 ##整数
 
-可用带符号的0-9组成的十进制, 0x开头的十六进制, 0b开头的二进制表示.
+可前置正负 '+','-' 号的 0-9 的十进制, 或 0x 开头的十六进制, 或 0b 开头的二进制表示.
 
-预声明的固定长度/尺寸数值类型有下面这些:
+预声明固定长度/尺寸整数类型有:
 
 ```
 '
@@ -303,10 +304,12 @@ Z 中用 byte 或 rune 类型可代表单个字符. 可以用字符串对 byte �
 ```
 var byte b = 'Hello Word' // b 的值为 'h'
 var rune r = '世界你好'    // r 的值为 '世'
-var rune e = ''           // 空字符串赋值详见下文解释
+var rune e = ''           // 空字符串值为 0.
 ```
 
-下列类型的长度/尺寸与运行环境有关：
+事实上这是由 string 类型的 toByte, toRune 方法进行的转换.
+
+下列类型的长度/尺寸与运行环境有关:
 
 ```
 '
@@ -385,7 +388,7 @@ echo '{
 	  }'.['tom', 8]
 ```
 
-输出结果为:
+输出:
 
 ```JSON
 {
@@ -403,7 +406,7 @@ echo '{
 	  }'.execute['tom', 8]
 ```
 
-输出
+输出:
 
 ```JSON
 {"name": "tom","age": 8}
@@ -417,7 +420,7 @@ datetime 表示日期和时间, 以 [ISO 8601][] 标准设计. 在源码中使�
 var datetime(
 	localdate = 20160204
 	localtime = 20160204T21:49
-	utcdate = 20160204Z
+	utcdate = 20160204Z // 尾部的 'Z' 表示时区为 0
 	utctime = 20160204T21:49Z
 	zonedate = 20160204T+08 // '+' 号两端是紧凑相连的
 	zonetime =  21:49+08
@@ -459,7 +462,7 @@ proc y =[
 
 ##注释
 
-注释是对某个标识符或语句体的说明. 注释在 Z 中是语句, Z 有三种注释写法.
+注释是对某个标识符或语句体的说明. 注释在 Z 中属于语句, Z 有三种注释写法.
 
 1. 尾注释以 '//' 开始, 直到行尾
 2. 块注释以三个以上的减号 '-' 位于一行非空白符之首开始, 并以此结束.
@@ -482,6 +485,12 @@ proc multiByteFriendly out bool =[
 	使用多字节字符写注释....
 	return true 就是这么直接
 ]
+
+type hello is example for Z =[
+	' is example for Z ' 是个备注, 被忽略了.
+	类型声明语法很规律, '=' 的存在为解析器提供了识别边界.
+	string word
+]
 ```
 
 依惯例, 注释最普遍的作用是生成文档. 从这个角度出发, Z 会忽略那无法确定归属的注释. 能向前归属到某个语句的注释被称作注释, 否则被称作备注. 以免描述时产生歧义.
@@ -491,30 +500,6 @@ proc multiByteFriendly out bool =[
 Z 中没有注释的注释, 所以注释 'sum 返回 x + y 的和' 尾部的注释仅是备注.
 
 Z 中的注释是后置的, 这和其它语言不同.
-
-
-
-无返回值的函数调用可以形成独立的语句.
-同理 Z 中匿名函数是匿名函数表达式, 因为它产生了结果.
-
-很明显, 语句可以顺序排列或者嵌套形成语句块.
-
-Z 源文件的代码块总是以下列关键字开始嵌套子代码块.
-
-```
-'var static const func type def proc'
-```
-
-子代码块可使用的语句更丰富. 
-
-```
-type hello is example for Z =[
-	string word
-]
-```
-
-子代码块被包裹在方括号/圆括号中. 此例中' is example for Z ' 被忽略了,
-因为在 `type` 语句中 Z 期待定界符 '=', 它之前不能识别的文本被忽略. 此例只是说明 Z 是怎么做的, 不是要推荐这样的写法.
 
 ##赋值语句
 
@@ -572,17 +557,22 @@ Z 中的匿名过程必须被执行, 因为写不出合法的匿名过程赋值�
 
 #声明
 
-##pub
+Z 源代码总是由下列声明开始的.
 
-所有声明缺省都是非导出的, 外部 block 不可访问, 声明前加保留字 pub 导出声明.
+```
+'var const static func type proc pub'
+```
 
+##导出声明
+
+声明默认都是非导出的, 如果允许外部 block 访问, 可在声明前加保留字 pub 进行修饰.
 
 ##静态声明
 
-静态标识只进行一次赋值操作.
+静态声明标识符 'static' 可对变量, 'func', 'proc' 以及属性声明进行修饰.
 
 ```
-static int x = 9
+static int x = 9 修饰变量总是省略 var
 static datetime day = fn() 调用函数直接赋值
 pub static string prefix 这个是导出的
 
@@ -591,7 +581,7 @@ proc oneday int interval  out datetime =[
 ]
 
 proc init =[
-	prefix = 'z' 随便在哪里进行唯一的一次赋值都行
+	prefix = 'z' 随便在哪里进行赋值都行
 ]
 
 proc fn ={
@@ -603,13 +593,12 @@ proc setName string val =[
 	static string name
 
 	if name is null {
-		用 is null 可知道变量是否经过赋值.
+		用 is null 可判定变量是否已经被赋值.
 		这与 name == null 是等价的.
 		name = val
 	}
 
-	name = val
-	事实上可以这么用, Z 会确保第一次赋值生效
+	name = val 最简单的写法, Z 会确保只赋值一次
 ]
 
 proc setOnce string val =[
@@ -626,9 +615,9 @@ type rep ={
 
 ##常量声明
 
-常量类似静态, 不同的是常量不声明类型, 只声明值, 常见的值类型有字符串, 数值, 布尔值, 时间值.
+常量不声明类型, 只声明值, 常见的值类型有字符串, 数值, 布尔值, 时间值.
 
-常量的值是字面值, 值在使用时才能显现出类型.
+常量的值是字面值, 值在使用时才能显现出类型以及合法性.
 
 ```
 const (
@@ -638,9 +627,9 @@ const (
 	ONE  = 1.0
 	YES  = true
 	code = {
-		实际上 Z 支持成对符号 []|{}|() 包括的内容作为常量值
-		第一个 CRLF 的值是被引号包裹的, 单引号, 双引号也是成对的.
-		虽然此常量叫 code, 但是到底是什么只有在用的时候才确定
+		可用成对的 '[]|{}|()' 包括的文本作为常量值
+		其实单引号, 双引号也是成对的.
+		虽然此常量命名为 code, 确切类型和用途在只在用时才显现,
 		也许这就是个注释, 谁知道呢
 	}
 	
@@ -661,7 +650,7 @@ const (
 
 ```
 var (
-	byte   b = CRLF 哦这下类型有了
+	byte   b = CRLF 这下类型有了
 	string s = CRLF
 	rune   r = CRLF
 )
@@ -695,7 +684,9 @@ proc call out string =[ 举例说明调用形式
 ##类型声明
 
 ```
-type fruit ={ 声明个水果类型
+type empty =[] 无属性类型
+
+type fruit ={ 带属性的水果类型
 	bool clean true 属性初值, 水果都是无污染产品
 	string brand,color
 	flavors []string 多种味道
@@ -705,19 +696,42 @@ type apple ={
 	use fruit[color='red'] 类型复合并且可以设置初值
 }
 
-成员方法是个过程
+成员方法是个过程, 这种过程可以叫做 '实例方法'
 proc fruit.isSweet out bool =[
 	return self.flavors not null and
 		self.flavors.has('sweet')
 ]
+
+匿名复合, 下列中的 path 继承了 string 所有导出成员
+type path =[
+	pub use string
+]
+
+给类型定义静态方法, 外部使用时直接用 path.fn('string')
+这种过程可以叫做 '类型方法'
+pub static proc path.last string dir =[
+	return dir.split('/').slice(-1)
+]
+
+proc path.name =[
+	实例方法调用类型方法也可以用 self
+	if self == '/' {
+		return '/'
+	}else{
+		return self.last(self)
+		因为 path 只符合了一种类型, 可以直接使用 self
+		否则需要使用 self.last(self.string)
+	}
+]
 ```
 
-Z 中没有 class, 没有继承, 没有真正的 this, 只是简单的类型复合.
+Z 中没有 class, 只是简单的类型复合.
 在上例中保留字 self 代指 proc isSweet 的接收类型 fruit.
 Z 支持几个特别的属性名可省略 self 进行访问, 当然这首先需要使用者声明这些属性
 
 ```
 type node =[
+	pub static name string 属性可以是静态的, 表示只赋值一次
 	node parent
 	[]node child
 	root this
@@ -744,15 +758,34 @@ proc node.fn =[
 
 #语句
 
+语句和声明的区别是: 语句产生的代码执行顺序和书写顺序一致, 声明产生的代码执行顺序由 Z 编译器实现决定.
 
-##if 语句
+##分支语句
+
+有两种语法结构
 
 ```
 if expr {
-}else  {
-}else{
+	// do something
+} else [ 也可以使用方括号包裹执行体
+]
+
+if expr {
+	// do something
+} else if expr1 { // if else if 结构
 }
+
+if expr 
+case a:
+	// do something
+	break
+case b, 用逗号替代冒号更便于输入
+else {
+}
+前面的 break 会跳转到这里
 ```
+
+
 
 ```
 `
