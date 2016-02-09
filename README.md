@@ -176,17 +176,13 @@ infinite  无穷大
 
 行首的空格, tab 缩进以及换行符 CR, LF 其实也是字面值.
 
-##常量字面值
-
-详见下文常量类型描述.
-
 ##占位文本
 
 Z 不能识别语义的文本被当做占位文本处理.
 
 #标识符
 
-标识符的正则为 `[a-zA-z_]+[a-zA-z_0-9]*`. 自定义标识符用于类型名, 常量名, 变量名, 过程名. 预定义标识符下文详述. 
+标识符的正则为 `[a-zA-z_]+[a-zA-Z_0-9]*`. 自定义标识符用于类型名, 常量名, 变量名, 过程名. 预定义标识符下文详述. 
 
 #符号
 
@@ -212,6 +208,7 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 方括号 '[]' 更便于输入, 可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
 
+下文中会出现分组方括号的例子.
 
 ##逗号
 
@@ -219,7 +216,7 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 ```
 var int x,y = 3+1,6     分隔声明变量, 分隔表达式
-var []int array = [1,2] 分隔值表达式
+var [int] array = [1,2] 分隔值表达式
 var (
 	int i,string s      分隔声明变量
 )
@@ -248,8 +245,7 @@ if a and (x or ((b or c) and (d or e))) [
 if a and, x or (b or c) and (d or e) [
 ]
 
-不能识别这种 if a and, x or, b or c, and, d or e
-
+下文将给出进一步消除分组括号的方法
 ```
 
 ##运算符
@@ -309,6 +305,23 @@ a mod b 等价于 a - (a/b)*b
 -3
 
 取模运算符 '%' 运算 a % b 时先对取绝对值, 等价 |a| mod |b|.
+
+运算符语法糖可进一步消除分组括号, 对于分组运算例子
+if a and (x or ((b or c) and (d or e))) [
+]
+
+使用运算符语法糖可该写为
+if a and x.or b.or c and d.or e [
+	二元 or 运算变成一元右结合运算
+	这也意味着保留字 or 不能用作成员名称
+]
+
+运算符语法糖混合逗号分组视觉上更清晰
+if a and, x or b.or c and d.or e [
+]
+
+同理使用加减法元算法语法糖
+var int x = i.add 1 mul 5  
 ```
 
 二元运算符 'is', 'isnot' 有多种情况.
@@ -326,8 +339,8 @@ type T=[
 	int x
 ]
 
-var []int x,
-	y = []int{0}
+var [int] x,
+	y = [0]
 
 var empty e,
 	T t,
@@ -343,9 +356,11 @@ t1 is null		结果为假
 
 Z 中运算符 'not', 'and', 'or' 是语法糖, 参见过程和分支语句.
 
-#类型
+#type
 
 类型名是个标识符. 预声明类型标识符是保留字.
+
+	保留字 type 可用来声明类型, 本身也是个类型, type 的类型就是 type.
 
 ##布尔
 
@@ -359,18 +374,18 @@ bool 的字面值为 true 或者 false.
 
 ```
 '
-uint8       无符号的 8 位整数 (0 to 255)
-uint16      无符号的 16 位整数 (0 to 65535)
-uint32      无符号的 32 位整数 (0 to 4294967295)
-uint64      无符号的 64 位整数 (0 to 18446744073709551615)
+u8       无符号的 8 位整数 (0 to 255)
+u16      无符号的 16 位整数 (0 to 65535)
+u32      无符号的 32 位整数 (0 to 4294967295)
+u64      无符号的 64 位整数 (0 to 18446744073709551615)
 
-int8        带符号的 8 位整数 (-128 to 127)
-int16       带符号的 16 位整数 (-32768 to 32767)
-int32       带符号的 32 位整数 (-2147483648 to 2147483647)
-int64       带符号的 64 位整数 (-9223372036854775808 to 9223372036854775807)
+i8        带符号的 8 位整数 (-128 to 127)
+i16       带符号的 16 位整数 (-32768 to 32767)
+i32       带符号的 32 位整数 (-2147483648 to 2147483647)
+i64       带符号的 64 位整数 (-9223372036854775808 to 9223372036854775807)
 
-byte        和 uint8 一样
-rune        和 int32 一样
+byte        和 u8 一样
+rune        和 i32 一样
 '
 ```
 
@@ -418,6 +433,7 @@ float    IEEE-754 32 或 64 位浮点数
 ##字符串
 
 string 是一对单引号或者双引号包裹的多行文本.
+字符串连接运算符使用 '+' 或者 '-' , 它们是等价的.
 
 ```
 proc hello out string =[
@@ -429,26 +445,30 @@ proc word out string =[
 ]
 
 var string (
-	a = '单引号字符串不支持反斜杠\转义值'
+	a = '单引号字符串不支持反斜杠\转义值' -
 		'直接断行也可以,
-		换行会被保留, 前置空白会被剔除.'
+		换行会被保留, 前置空白会被剔除.' -
 		"字符串可以多行混合. 这四行组成一个字符串值"
 
-	b = '字符串还支持嵌入参数 $a $b'.['a'=1,'b'=2]
+	b = '字符串还支持嵌入参数 $a $b'.['a'=1,'b'=2] -
 		'SQL 参数序号风格 $1 $2'.[$a, $b]
 		"变量值会被转换为字符串表示,
 		这四行组成了一个字符串"
 
-	c = hello() word() 行内字符串表达式值连接无需运算符
+	c = hello() + word() 字符串连接可以使用 '+' 号
 
-	d = hello()word() 支持紧凑书写
+	d = hello() - word() 字符串连接也可以使用 '-' 号
 
-	e = hello() -
+	e = hello() - 尾注释会被正确处理
 		' word' 前行尾部用 '-' 避免括号终结歧义, 否则就成注释了.
 
-	f = '空白行会终止多字符串拼接'
+	f = '空白行会终止多字符串拼接' 此处不能用连接符连接下下行
 
-        '上面有个空白行, 变量 c 的值不包括这一行'
+        '上面的空白行产生分号, 赋值语句完结了'
+
+	g = '连续多行字符串, 此行没有使用连接符'
+        '这一行只是个注释'
+
 )
 ```
 
@@ -509,17 +529,23 @@ var datetime(
 数组是预定义类型, 用前缀的方括号表示, 没有单独的保留字标识符.
 
 ```
-var []int a
-var []int (
+var [int] a 看上去非常规, 录入却很自然 
+var [int] ( 类型分组声明写法
 	c
-	d = []int{ 赋初值仍然要写完整类型
+	d = [ 赋初值就直接写吧
 		1,2,3,
 		call() 使用表达式运算结果
-	}
+	]
 )
 
 访问数组元素
-var int e = d[0] 支持直接访问已有的变量
+var int e = d[0] 直接访问已有的变量
+
+多维数组嵌套中括号即可
+
+var [[int]] point =[
+		[1,2,3]
+	]
 ```
 
 ##映射
@@ -527,22 +553,24 @@ var int e = d[0] 支持直接访问已有的变量
 映射具有 key-value 结构, key 和 value 的具体类型有使用者定以.
 
 ```
-map 赋值使用 JSON 风格
-var map[string]int m = map[string]int{
-	'age': 13,
-	"height": 156 
+给 map 赋值可以使用 JSON 风格, Z 编译器会检查值的合法性
+var map[string]int m = {
+	'age': 13, 
+	"height": 156 有换行的话可以省略逗号
+	"id": 1 
 }
 
-key 和 value 可以是任意类型, 甚至可以使用 type
-var map[type]string types = map[type]string{
+key 和 value 可以是任意类型
+var map[type]string types = [ 万能的方括号
 	string: 'string',
 	int: 'integer'
-}
+]
 
-var map[type]type assoc = map[type]type{
+甚至可以使用 type
+var map[type]type assoc = [
 	string: types,
 	int: float
-}
+]
 
 访问映射
 var int e = m['age'] 支持直接访问已有的变量
@@ -551,10 +579,6 @@ var type t= m[string]
 
 Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别的,
 在 Z 中 type 的类型就是 type, 可以用于过程的参数类型.
-
-##type
-
-保留字 type 是个超级类型, 
 
 #表达式
 
@@ -565,28 +589,9 @@ Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别
 
 #语句
 
-语句无返回值, 在 Z 源文件中最先出现的语句是注释或声明.
+语句无返回值, 语句产生的代码执行顺序和书写顺序一致.
 
-```
-proc x out int =[
-	return 5
-	// Z 中的 return 是个语法糖. 它等同于两条语句
-	// result = 5
-	// end
-]
-
-proc noret =[
-]
-
-proc y =[
-	x() 这是非法的.
-	因为产生了运算结果, 虽然被抛弃了可还是个表达式, 表达式不能独立存在.
-
-	discard x() 这是一条 discard 语句, Z 不会自动添加 discard.
-
-	noret() 合法语句, 因为没有产生运算结果
-]
-```
+在 Z 源文件中最先出现的语句是注释或声明.
 
 ##注释
 
@@ -604,8 +609,16 @@ proc y =[
 这是个块注释, 可以多行书写.
 纵观整个文本, 无法确定这条注释属于哪个标识符
 ---
+
+因为标识符由英文字符和数字组成
+所以多字节字符开头的注释可以直接写
+
+The line is a comment.
+上一行英文也是注释, 原因见下文关于声明的描述.
+
+此行注释位于 proc sum 上面, 但不属于 sum 的注释
 proc sum int x,y,out int =[
-	'sum 返回 x + y 的和' // 此行注释归属于标识符 proc sum
+	'sum 返回 x + y 的和' // 此行前部注释归属于标识符 proc sum
 	return x + y // 返回 x+y
 ]
 
@@ -619,9 +632,9 @@ proc multiByteFriendly out bool =[
 
 上例中, 字符串 'sum 返回 x + y 的和' 和 `return` 语句尾部的注释可以追溯归属. 其它的注释仅是备注.
 
-Z 中没有注释的注释, 所以注释 'sum 返回 x + y 的和' 尾部的注释仅是备注.
-
 Z 中的注释是后置的, 这和其它语言不同.
+
+Z 中没有注释的注释, 所以注释 'sum 返回 x + y 的和' 尾部的注释仅是备注.
 
 ##赋值语句
 
@@ -677,13 +690,177 @@ proc run ={ 换个定界符
 
 Z 中的匿名过程必须被执行, 因为写不出合法的匿名过程赋值语句.
 
+```
+proc x out int =[
+	return 5
+	// Z 中的 return 是个语法糖. 它等同于两条语句
+	// out = 5
+	// end
+]
+
+proc noret =[
+]
+
+proc y =[
+	x() 非法, 因为产生了运算结果是个表达式, 表达式不能独立存在.
+	
+	discard x() 可使用保留字 discard 丢弃结果形成语句.
+
+	noret() 合法语句, 因为没有产生运算结果.
+]
+```
+
+##分支语句
+
+有两个标识符可选, 'if' 和 'switch'.
+
+```
+if expr {
+	// do something
+} else [ 也可以使用方括号包裹执行体
+]
+
+if expr {
+	// do something
+} else if expr1 {
+}
+
+switch expr {
+case a:
+	if something {
+		break
+	}
+	// do ...
+case b,c: 可选多值匹配
+default: {
+}
+
+前面的 break 会跳转到这里
+```
+
+分支语句中的 break 只能存在于 case 中.
+每个 case 语句块结束的位置总是隐含一条 break.
+
+
+##循环语句
+
+循环语句由保留字 for 开始, 有多种语法.
+
+```
+一段式循环条件
+for condExpr {
+	if expr1 {
+		continue
+	}
+
+	if expr2 {
+		break
+	}
+}
+
+三段式循环条件
+for doSomething; condExpr; doSomethingBeforeNextLoop {
+}
+常见的
+for var i = 0; i < 10; i++{
+}
+
+遍历数组
+for array as index {
+}
+
+for array as index item {
+	其中 index 为数组下标, item 为 array[index] 的值
+} 
+
+遍历 int 数值范围, 从 1 到 10
+for 1..10 as index item {
+	echo index, item 显然 item 和 index + 1 是相等的
+} 
+
+遍历立即字符串数组
+for ['name', 'nick', 'email'] as index item {
+	相当于匿名声明了一个 static [string] 
+}
+
+遍历已经声明的映射变量 maps
+for maps as key {
+}
+
+for maps as key val {
+}
+
+遍历立即定义的映射需要声明类型
+for map[string]int{'a':1,'b':2} as key intVal {
+}
+
+遍历类型成员
+for int as name typ {
+	在 Z 中类型标识符可作为参数
+}
+
+甚至通过遍历了解 type
+for type as name typ {
+}
+
+遍历前文声明的类型 fruit
+for fruit as name typ {
+}
+
+遍历非映射变量
+var fruit f = [color='red']
+for f as memberName typ {
+	注意 typ 不是 memberName 对应的值, 是 memberName 对应类型 
+	因为 Z 是强类型语言
+}
+```
+
+循环, 分支与 is, isnot 运算符的使用:
+
+```
+var map[type]string types ={
+	string: 'string',
+	int: 'integer'
+}
+
+var map[type]type assoc ={
+	string: types,
+	int: float
+}
+
+proc fn =[
+	for assoc as t val {
+		if t is int {
+			doSomething()
+			continue
+		}
+		
+		if t has string and t[string] isnot null {
+			break
+		}
+		
+		var maps = types(val[string]) 强制类型转换
+		
+		switch  {
+		case string:
+			
+		}
+	}
+]
+```
+
 #声明
+
+声明产生的代码执行顺序由 Z 编译器决定
 
 Z 源代码总是由下列声明开始的.
 
 ```
-'var const static func type proc pub'
+'pub const var static func proc type'
 ```
+
+很明显, 用纯英文写 Z 源码, 避开这些词写顶层注释非常容易.
+如果行首用到这些词, 大写首字母或者随便加个非空白符号就行.
 
 ##导出声明
 
@@ -727,7 +904,7 @@ proc setOnce string val =[
 	static string name = val 最简洁的写法
 ]
 
-声明时直接赋值
+声明时直接给属性赋值
 
 type rep ={
 	static string version = '0.0.0'    定值静态属性
@@ -737,9 +914,9 @@ type rep ={
 
 ##常量声明
 
-常量不声明类型, 只声明值, 常见的值类型有字符串, 数值, 布尔值, 时间值.
+常量只声明值, 常见的值类型有字符串, 数值, 布尔值, 时间值.
 
-常量的值是字面值, 值在使用时才能显现出类型以及合法性.
+常量的值是字面值, 常量在使用时才能显现出类型以及合法性.
 
 ```
 const (
@@ -751,7 +928,7 @@ const (
 	code = {
 		可用成对的 '[]|{}|()' 包括的文本作为常量值
 		其实单引号, 双引号也是成对的.
-		虽然此常量命名为 code, 确切类型和用途在只在用时才显现,
+		虽然此常量命名为 code, 确切类型和用途在用时才显现,
 		也许这就是个注释, 谁知道呢
 	}
 	
@@ -772,7 +949,7 @@ const (
 
 ```
 var (
-	byte   b = CRLF 这下类型有了
+	byte   b = CRLF 此时常量的值类型显现了
 	string s = CRLF
 	rune   r = CRLF
 )
@@ -783,62 +960,73 @@ var (
 函数, 类型方法统称为过程, 由名字, 参数和过程体组成
 
 ```
-func toString out string 保留字 func 只声明名字和参数类型
+func toString out string
+保留字 func 只声明名字和参数类型
 并且, 参数中只写类型, 不能带参数名
-保留字 out 表示该参数被输出
+多个参数间不使用逗号分隔
+保留字 out 表示之后的参数被输出
+
+func toInt string out int
 
 proc toString out string s =[
-	保留字 proc 声明带执行体的过程, 参数必须具名
-	return 'hello' - s 注意看这句...
+	保留字 proc 声明带执行体的过程
+	s = 'hello' - s
+	end // end 指示终止过程
 ]
 
-proc call out string =[ 举例说明调用形式
-	var string s = 'word'
-	return toString() - toString('word')
+pub proc walk func callback int out int, out bool =[
+	这个过程有两个参数, 第一个参数是个函数类型
+	显然 func 参数无逗号的设计显现出作用
 ]
 
+使用函数变量
 proc fn =[
-	var func f out string 声明函数变量必须用 func
-	var func c = call 声明并赋值可以省略函数的参数声明
+	var func f out string 声明函数变量用 func
+	var func c = fn 声明并赋值
+	
+	f = proc out string ={ 匿名过程赋值
+		out = 'hello'
+	}
 ]
 ```
 
-如果一个 block 只用 func 声明了过程, 那么会产生如下情况:
+如果只用 func 声明了过程而没有实现代码, 那意味着:
 
 ```
-pub func fn // fn 被外部实现, 或在参数中作为类型约束
+pub func fn	在外部实现, 或在参数中作为类型约束
 
-func call   // call 来自外部连接库, 或被 block 内的过程输出
+func call	来自外部连接库, 或被 block 内的过程输出
 ```
 
 关于过程的参数:
 
-1. 参数必须具有类型和名字
-2. 参数都有零值或缺省值,  null 是通用的零值.
-3. 调用过程不必传递所有参数.
-4. 从第一个出现的 out 修饰开始, 表示后续参数具有输入输出双向性.
-5. 保留字 result 替代输出参数,  它是个语法糖没有类型, 不能作为参数传递.
-6. 保留字 return 也是个语法糖, 等同输出参数再 end
-
+1. 单纯的输入参数必须具有类型和名字
+2. 输出参数只有一个的话, 可以省略参数名 
+3. 参数都有零值或缺省值,  null 是通用的零值.
+4. 调用过程不必传递所有参数.
+5. out 后续的参数具有输入输出双向性.
+6. 保留字 return 是个语法糖, 等同先设置输出参数再 end
 
 ```
-proc one out int x =[
-	result = 1 单个输出可用 result 替代
-	return 2 只有一个输出参数的话, 可以用 return
+proc one out int =[ 此例省略了唯一的输出参数名
+	out = 1 用 out 替代唯一的输出参数
+	return 2 这只是个语法糖, 等同
+	out = 2
+	end
 ]
 
 proc fn out int x,y =[
-	result.x = 1
-	result.y = 2
-	可把 result 当做对象用
-	result =[
-		x = 1,
+	out.x = 1
+	out.y = 2
+	可把 out 当做对象用
+	out =[
+		x = 1
 		y = 2
 	]
 	也可以用 JSON 风格
-	result ={
-		x:1,
-		y:2
+	out ={
+		x: 1,
+		y: 2
 	}
 	end 保留字 end 指示结束过程, 可以省略它
 
@@ -926,195 +1114,6 @@ proc node.fn =[
 ```
 
 注意: Z 只是对 this, parent, child 属性提供了便捷访问方式, 不关心, 也不明白它们与 self 的真正关系.
-
-
-
-#语句
-
-语句和声明的区别是: 语句产生的代码执行顺序和书写顺序一致, 声明产生的代码执行顺序由 Z 编译器实现决定.
-
-##分支语句
-
-有两个标识符可选, 'if' 和 'switch'.
-
-```
-if expr {
-	// do something
-} else [ 也可以使用方括号包裹执行体
-]
-
-if expr {
-	// do something
-} else if expr1 {
-}
-
-switch expr {
-case a:
-	if something {
-		break
-	}
-	// do ...
-case b,c: 可选多值匹配
-default: {
-}
-
-前面的 break 会跳转到这里
-```
-
-分支语句中的 break 只能存在于 case 中.
-每个 case 语句块结束的位置总是隐含一条 break.
-
-
-##循环语句
-
-循环语句由保留字 for 开始, 有多种语法.
-
-```
-一段式循环条件
-for condExpr {
-	if expr1 {
-		continue
-	}
-
-	if expr2 {
-		break
-	}
-}
-
-三段式循环条件
-for doSomething; condExpr; doSomethingBeforeNextLoop {
-}
-常见的
-for var i = 0; i < 10; i++{
-}
-
-数组
-for array as index {
-	// 对于数组, 下标 index 是从 0 开始的正整数
-}
-
-for array as index item {
-	// item 为 array[index]
-} 
-
-立即数组
-for []int{1..10} as index item {
-	echo index, item
-} 
-
-映射
-for maps as key {
-}
-
-for maps as key val {
-}
-
-立即映射
-for map[string]int{'a':1,'b':2} as key val {
-}
-
-遍历自定义类型成员, 以前文 fruit 为例
-
-for fruit as name typ {
-}
-
-var fruit f=fruit[color='red']
-for f as name typ {
-	事实上是对 f 的类型成员进行枚举
-	这意味着 Z 中没有泛型, 运行期所有的值都是有类型的.
-	但是 Z 的 map 为类似问题提供解决途径
-}
-```
-
-循环, 分支与 is, isnot 运算符的使用:
-
-```
-var map[type]string types = map[type]string{
-	string: 'string',
-	int: 'integer'
-}
-
-var map[type]type assoc = map[type]type{
-	string: types,
-	int: float
-}
-
-proc fn =[
-	for assoc as t val {
-		if t is int {
-			doSomething()
-			continue
-		}
-		
-		if t has string and t[string] isnot null {
-			break
-		}
-		
-		var maps = types(val[string]) 强制类型转换
-		
-		switch  {
-		case string:
-			
-		}
-	}
-]
-```
-
-
-```
-`
-continue
-defer
-for from func
-go goto
-iota is isnot
-not null
-of or out
-proc pub
-range return
-shl shr static sub
-to trait type
-use
-var
-xor
-yield
-`
-```
-
-#声明和作用域
-
-#保留字
-
-保留字不能被重新声明. 上文中预声明的值和类型名都是保留字.
-
-以下关键字或类型名被保留. 
-
-```
-'
-add and as asm atomic
-break
-case const continue
-def defer
-else end
-for from func
-go goto
-has
-if is isnot
-mul
-not null
-or out
-proc pub
-range ref return
-static sub
-template to trait type
-use
-var
-xor
-yield
-int128 uint128
-'
-```
-
 
 
 [ISO 8601]: https://en.wikipedia.org/wiki/ISO_8601
