@@ -1,5 +1,5 @@
 
-Z 目前只是个设想 
+Z 目前只是个设想
 
 #简介
 
@@ -34,21 +34,21 @@ var datetime (
 )
 
 proc hello string word =[
-	echo 'hello ' word 
+	echo 'hello ' word
 ]
 
 甚至缩进风格
 proc long_function_name =
         var int _one, _two, _three,
 	       _four
-		doSomeThing()	
+		doSomeThing()
 ```
 
-这基本上就是自然语言的风格. 
+这基本上就是自然语言的风格.
 
 	Z 没有代码风格规范, 书写者自己说了算. 代码规范令人厌恶.
 	如果 Z 不能识别某种风格代码, 只说明 Z 不够强壮.
-	如果某编辑不能友好的显示, 只说明该编辑器不够强壮.
+	如果编辑器不能友好的显示, 只说明该编辑器不够强壮.
 
 Z 提供了源码格式化工具, 如果你愿意使用, 上面的代码会转换成下面的样子
 
@@ -72,7 +72,7 @@ var datetime {
 }
 
 proc hello string word ={
-	echo 'hello ' word 
+	echo 'hello ' word
 }
 
 甚至缩进风格
@@ -108,7 +108,7 @@ Z 依靠目录名和文件名组织源代码:
 4. benchmark 评测
 5. hack  只在 main 包中被工具链自动载入.
 
-某些时候急需修改某个依赖包, 那么无需等待维护者更新, 也无需修改依赖包源码, 自己写个外部的 hack `package`  就可以替换掉原包中的代码. 
+某些时候急需修改某个依赖包, 那么无需等待维护者更新, 也无需修改依赖包源码, 自己写个外部的 hack `package`  就可以替换掉原包中的代码.
 
 文件名中的包名和子目录重名举例:
 
@@ -128,7 +128,7 @@ rep
 文件 'rep.md', 'some.md' 归属包 'rep', 也就是它们的上层目录名所表示的包名.
 
 文件 'rep-hello.zxx' 归属包 'rep/rep', 因为它包含了新的包名称.
- 
+
 ##block.json
 
 上例中的文件 'block.json' 用来描述该目录下的源码情况.
@@ -138,7 +138,7 @@ Z 没有把 block 做保留字, block 就在代码中, 通常被 '{}' 或者 '[]
 
 显然使用仓库, 项目, 包这些词汇进行描述更友好.
 
-	目录的层级关系只是存储的组织形式, package 或者 block 都是平级的, 没有层级归属. 
+	目录的层级关系只是存储的组织形式, package 或者 block 都是平级的, 没有层级归属.
 
 'block.json' 采用语义化属性名, 通常这无需特别解释, 看到名称就知道作用.
 
@@ -206,16 +206,16 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 #标识符
 
-标识符的正则为 `[a-zA-z_]+[a-zA-Z_0-9]*`. 
-自定义标识符用于类型名, 常量名, 变量名, 过程名. 
-预定义标识符见下文. 
+标识符的正则为 `[a-zA-z_]+[a-zA-Z_0-9]*`.
+自定义标识符用于类型名, 常量名, 变量名, 过程名.
+预定义标识符见下文.
 
 #符号
 
 ##分号
 
 分号 ";" 用来指示语句的结束边界.
-源码经过格式美化后分号会被省略. 除非代码 minify 到一行. 
+源码经过格式美化后分号会被省略. 除非代码 minify 到一行.
 
 换行或者空行会依据上文的完整性推导为分号. 推导规则:
 
@@ -276,25 +276,25 @@ if a and, x or (b or c) and (d or e) [
 
 运算符只能出现在表达式中, 下表按优先级从高到低排列.
 
-| 运算符                    | 解释			|
-|--------------------------|----------------|
+| 运算符                   | 解释			    |
+|--------------------------|--------------------|
 | $                        |模板取值是独立运算	|
 | ~                        |一元右结合位反		|
 | &,\|,xor                 |位与,或,异或		|
 | mul,*,/,mod,%,<<,>>      |乘除,整数取模,位移	|
-| add,+,-                  |数值加减,字符串连接| 
-| to                       |数值至数值		|
+| add,+,-                  |数值加减,字符串连接	|
+| to                       |数值至数值			|
 | ==,!=,<=,>=,>,<          |比较运算			|
 | is,isnot,has             |结果是布尔类型		|
 | not                      |一元右结合非		|
-| and                      |与				|
-| or                       |或				|
+| and                      |与					|
+| or                       |或					|
 
 模板取值运算符 '$' 是 Z 语言特征,  不能归类到一元运算符.
 
 ```
-运算符 mul 等价于四则乘法运算符 '*'. 
-运算符 add 等价于四则加法运算符 '+'. 
+运算符 mul 等价于四则乘法运算符 '*'.
+运算符 add 等价于四则加法运算符 '+'.
 加减乘除四则运算要求运算子类型一致且结果类型不变
 
 -3 / 2 == -1 整除
@@ -355,7 +355,7 @@ var int x = i.add -1 mul 5 等同 (i-1)*5
 a is b 等价 a == b
 a isnot b 等价 a != b
 int(0) is null 等价 int(0) == 0
-'string' is null 等价 'string' == '' 
+'string' is null 等价 'string' == ''
 
 数组, 映射和自定义类型没有被赋值时值为 null, 所以
 type empty =[]
@@ -378,7 +378,7 @@ t is null		结果为真
 t1 is null		结果为假
 ```
 
-运算符 'not', 'and', 'or' 的运算结果是 null 或者运算子的值. 
+运算符 'not', 'and', 'or' 的运算结果是 null 或者运算子的值.
 
 #类型
 
@@ -413,7 +413,7 @@ rune        和 i32 一样
 '
 ```
 
-Z 中用 byte 或 rune 类型可代表单个字符. 可以用字符串对 byte 和 rune 类型进行赋值. 
+Z 中用 byte 或 rune 类型可代表单个字符. 可以用字符串对 byte 和 rune 类型进行赋值.
 
 ```
 var byte b = 'Hello Word' // b 的值为 'h'
@@ -551,7 +551,7 @@ var datetime(
 数组是预定义类型, 用前缀的方括号表示, 没有单独的保留字标识符.
 
 ```
-var [int] a 看上去非常规, 录入却很自然 
+var [int] a 看上去非常规, 录入却很自然
 var [int] ( 类型分组声明写法
 	c
 	d = [ 赋初值就直接写吧
@@ -577,9 +577,9 @@ var [[int]] point =[
 ```
 给 map 赋值可以使用 JSON 风格, Z 编译器会检查值的合法性
 var map[string]int m = {
-	'age': 13, 
+	'age': 13,
 	"height": 156 有换行的话可以省略逗号
-	"id": 1 
+	"id": 1
 }
 
 key 和 value 可以是任意类型
@@ -597,7 +597,7 @@ var map[type]type assoc = [
 访问映射
 var int e = m['age'] 支持直接访问已有的变量
 var type t= m[string]
-``` 
+```
 
 Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别的,
 在 Z 中 type 的类型就是 type, 可以用于过程的参数类型.
@@ -627,7 +627,7 @@ Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别
 4. 语句尾部以 tab "\t" 开始, 直至行尾
 
 ```
-// 这是一条尾注释, 可以分成连续的多行书写. 
+// 这是一条尾注释, 可以分成连续的多行书写.
 // 纵观整个文本, 无法确定这条注释属于哪个标识符
 
 ---
@@ -646,7 +646,7 @@ proc sum int x,y,out int =[
 	'sum 返回 x+y'	// 此行前部注释归属于标识符 proc sum
 	out x add y		result x+y
 
-	注意 'result x+y' 前面有 tab, 所以它是个注释 
+	注意 'result x+y' 前面有 tab, 所以它是个注释
 ]
 
 proc multiByteFriendly out bool =[
@@ -692,14 +692,14 @@ proc run ={ 换个定界符
 	}
 
 	proc noret ={
-		执行无返回值的具名过程 
+		执行无返回值的具名过程
 	}()
-	
+
 	var int x = proc out int ={
 		执行匿名过程, 返回值被接收
 		out 1
 	}()
-	
+
 	下面的写法是非法的
 	'
 	var fn1 = proc ={}	缺少类型声明
@@ -729,7 +729,7 @@ proc noret =[
 
 proc y =[
 	x() 非法, 因为产生了运算结果是个表达式, 表达式不能独立存在.
-	
+
 	discard x() 可使用保留字 discard 丢弃结果形成语句.
 
 	noret() 合法语句, 因为没有产生运算结果.
@@ -797,16 +797,16 @@ for array as index {
 
 for array as index item {
 	其中 index 为数组下标, item 为 array[index] 的值
-} 
+}
 
 遍历 int 数值范围, 从 1 到 10
 for 1..10 as index item {
 	echo index, item 显然 item 和 index + 1 是相等的
-} 
+}
 
 遍历立即字符串数组
 for ['name', 'nick', 'email'] as index item {
-	相当于匿名声明了一个 static [string] 
+	相当于匿名声明了一个 static [string]
 }
 
 遍历已经声明的映射变量 maps
@@ -836,7 +836,7 @@ for fruit as name typ {
 遍历非映射变量
 var fruit f = [color='red']
 for f as memberName typ {
-	注意 typ 不是 memberName 对应的值, 是 memberName 对应类型 
+	注意 typ 不是 memberName 对应的值, 是 memberName 对应类型
 	因为 Z 是强类型语言
 }
 ```
@@ -860,16 +860,16 @@ proc fn =[
 			doSomething()
 			continue
 		}
-		
+
 		if t has string and t[string] isnot null {
 			break
 		}
-		
+
 		var maps = types(val[string]) 强制类型转换
-		
+
 		switch  {
 		case string:
-			
+
 		}
 	}
 ]
@@ -957,7 +957,7 @@ const (
 		虽然此常量命名为 code, 确切类型和用途在用时才显现,
 		也许这就是个注释, 谁知道呢
 	}
-	
+
 	EASY = [
 		1,2,3 随便了, 反正用的时候才有意义
 	]
@@ -989,7 +989,7 @@ var (
 func toString out string
 保留字 func 只声明过程名字和参数类型, 不给参数命名
 保留字 out 表示之后的参数被输出
-各部分间不使用逗号, 也就是说 func 声明中不允许出现逗号. 
+各部分间不使用逗号, 也就是说 func 声明中不允许出现逗号.
 
 func toInt string out int
 
@@ -1008,7 +1008,7 @@ pub proc walk func callback int out int, out bool =[
 proc fn =[
 	var func f out string 声明函数变量用 func
 	var func c = fn 声明并赋值
-	
+
 	f = proc out string ={ 匿名过程赋值
 		out = 'hello'
 	}
@@ -1027,7 +1027,7 @@ func call	来自外部连接库, 或被 block 内的过程输出
 
 1. 参数声明中 out 前的参数必须具有类型和名字
 2. 参数声明中 out 后的参数具有输入输出双向性
-3. 只有一个 out 参数时, 可以省略参数名 
+3. 只有一个 out 参数时, 可以省略参数名
 4. 参数都有零值或缺省值,  null 是通用的零值.
 5. 调用过程不必传递所有参数.
 6. 过程体中 out 既可以替代输出参数, 也可以用作返回语句
@@ -1107,7 +1107,7 @@ type apple ={
 	use fruit =[			类型复合并设置初值
 		name='apple',
 		color='red'
-	] 
+	]
 }
 
 匿名复合并导出类型 string 的所有成员.
@@ -1133,7 +1133,7 @@ proc path.name out string =[
 	}
 	out self.last(self) 等价于
 	out self.last(self.string)
-	
+
 	更简单的写法
 	out self is '/' and self or self.last(self)
 ]
