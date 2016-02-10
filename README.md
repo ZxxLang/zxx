@@ -3,11 +3,13 @@ Z 目前只是个设想
 
 #简介
 
-ZxxLang 是一门文档风格通用编程语言. 初衷是混合文档和代码于一体并降低 shift 按键使用频率.  ZxxLang 通过忽略不能识别的文本, 并减少或替代和 shift 按键有关的符号来实现此目标.
+ZxxLang 是一门通用编程语言. 初衷是混合文档和代码于一体并降低 shift 按键使用频率.  ZxxLang 通过忽略不能识别的文本, 减少 shift 按键的使用来实现此目标.
 
-	也许实现目标所用的方法让一些人难于接受, 但这正是 Zxx 的特征.
+	初衷貌似不靠谱, 事实上 Zxx 的语法更近自然语言.
 
 简便起见, 下文用 Z 替代 ZxxLang 进行描述.
+
+Z 是强类型语言, 虽然可根据上下文进行类型推导, 但最终类型是明确的, 并和相关操作要求匹配.
 
 Z 的语法比较宽松下面的几种输入风格都是合法的:
 
@@ -19,6 +21,8 @@ var [
 	int y=5
 	int z,i=4
 ]
+
+var int a, string b
 
 var (
 	float f = 9.0
@@ -32,13 +36,21 @@ var datetime (
 proc hello string word =[
 	echo 'hello ' word 
 ]
+
+甚至缩进风格
+proc long_function_name =
+        var int _one, _two, _three,
+	       _four
+		doSomeThing()	
 ```
 
-Z 支持用输入方括号替代圆括号和花括号, 因为方括号不用 shift 键, 更便于输入. 
+这基本上就是自然语言的风格. 
 
 	Z 没有代码风格规范, 书写者自己说了算. 代码规范令人厌恶.
+	如果 Z 不能识别某种风格代码, 只说明 Z 不够强壮.
+	如果某编辑不能友好的显示, 只说明该编辑器不够强壮.
 
-Z 提供了源码格式美化工具, 如果你愿意使用, 上面的代码会转换成下面的样子
+Z 提供了源码格式化工具, 如果你愿意使用, 上面的代码会转换成下面的样子
 
 ```
 var string s = 'hello word'
@@ -48,6 +60,8 @@ var {
 	int y=5
 	int z,i=4
 }
+
+var int a, string b
 
 var float f = 9.0
 
@@ -59,6 +73,13 @@ var datetime {
 
 proc hello string word ={
 	echo 'hello ' word 
+}
+
+甚至缩进风格
+proc long_function_name ={
+	var int _one, _two, _three,
+		_four
+	doSomeThing()
 }
 ```
 
@@ -113,7 +134,7 @@ rep
 上例中的文件 'block.json' 用来描述该目录下的源码情况.
 文件名使用 'block' 而不是 'package' 是因为 Z 中没有 package 概念, 只有块 -- block.
 
-虽然 Z 没有占用 block 关键字, block 就在代码中, 通常被 '{}' 或者 '[]' 包裹着.
+Z 没有把 block 做保留字, block 就在代码中, 通常被 '{}' 或者 '[]' 包裹着.
 
 显然使用仓库, 项目, 包这些词汇进行描述更友好.
 
@@ -156,22 +177,25 @@ Z 中它们是互斥的. Z 是这样确定语素的:
 4. 是不是能声明新标识符
 5. 判定为 占位字面值
 
-字面值和语素组成表达式或者语句, 表达式只能存在于语句中, 语句构成 block.
+```
+字面值和标识符组成表达式或语句
+表达式只能存在于语句中
+语句构成源文件
+源文件构成 block
+```
 
 #字面值
 
-字面值是就是一段文本. 它的语义类型是在使用时判定的, 有可能被判定为非法值.
+字面值是一段文本. 它的语义类型是在使用时判定的, 有可能被判定为非法值.
 
 ##预声明字面值
 
 ```
-`
 null      无值, 零值
 false     假
 true      真
 NaN       非数
 infinite  无穷大
-`
 ```
 
 行首的空格, tab 缩进以及换行符 CR, LF 其实也是字面值.
@@ -182,17 +206,19 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 #标识符
 
-标识符的正则为 `[a-zA-z_]+[a-zA-Z_0-9]*`. 自定义标识符用于类型名, 常量名, 变量名, 过程名. 预定义标识符下文详述. 
+标识符的正则为 `[a-zA-z_]+[a-zA-Z_0-9]*`. 
+自定义标识符用于类型名, 常量名, 变量名, 过程名. 
+预定义标识符见下文. 
 
 #符号
 
 ##分号
 
-分号 ";" 用来指示语句的结束边界. 源码经过格式美化后分号会被省略. 除非代码 minify 到一行. 
+分号 ";" 用来指示语句的结束边界.
+源码经过格式美化后分号会被省略. 除非代码 minify 到一行. 
 
 换行或者空行会依据上文的完整性推导为分号. 推导规则:
 
-	字符串表达式有独立的规则.
 	如果上文至此换行可形成完整的语句, 把换行当做分号.
 
 *注意: 不良的换行可能引起下文非法, 甚至被当做注释.*
@@ -208,8 +234,6 @@ Z 不能识别语义的文本被当做占位文本处理.
 
 方括号 '[]' 更便于输入, 可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
 
-下文中会出现分组方括号的例子.
-
 ##逗号
 
 逗号 ',' 具有多种用途. 可用来分隔声明, 表达式以及语句.
@@ -221,7 +245,7 @@ var (
 	int i,string s      分隔声明变量
 )
 
-proc loop =[
+proc each =[
 	for var int x,y = 0,0; x < 10 ;x++, y = y*x[
 		三段式 `for` 语句中第一, 第三段是语句.
 		echo x,y
@@ -274,7 +298,7 @@ if a and, x or (b or c) and (d or e) [
 加减乘除四则运算要求运算子类型一致且结果类型不变
 
 -3 / 2 == -1 整除
-0.1*0.1 isnot 0.01 浮点数精度造成的
+0.1*0.1 isnot 0.01 是浮点数精度造成
 
 取模运算符 mod 的运算子为同类型整型
 a mod b 等价于 a - (a/b)*b
@@ -354,13 +378,13 @@ t is null		结果为真
 t1 is null		结果为假
 ```
 
-Z 中运算符 'not', 'and', 'or' 是语法糖, 参见过程和分支语句.
+运算符 'not', 'and', 'or' 的运算结果是 null 或者运算子的值. 
 
 #类型
 
-类型名是个标识符. 预声明类型标识符是保留字.
+类型名称是个标识符. 预声明类型标识符是保留字.
 
-	保留字 type 可用来声明类型, 本身也是个类型, type 的类型就是 type.
+	保留字 type 是一切类型的根类型.
 
 ##布尔
 
@@ -585,6 +609,8 @@ Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别
 1. 必定产生运算结果.
 2. 必定存在于语句中.
 
+表达式运算结果可分为零值和非零值.
+
 #语句
 
 语句无返回值, 语句产生的代码执行顺序和书写顺序一致.
@@ -715,7 +741,7 @@ proc y =[
 有两个标识符可选, 'if' 和 'switch'.
 
 ```
-if expr {
+if expr { 当 expr 的值为真时
 	// do something
 } else [ 也可以使用方括号包裹执行体
 ]
@@ -870,7 +896,7 @@ Z 源代码总是由下列声明开始的.
 
 在变量或属性声明前加保留字 static 表示只能被赋值一次.
 
-声明 static func 详见过程声明.
+静态过程详见过程声明.
 
 ```
 static int x = 9				静态变量声明不带 'var'
@@ -916,9 +942,7 @@ type rep ={
 
 ##常量声明
 
-常量只声明值, 常见的值类型有字符串, 数值, 布尔值, 时间值.
-
-常量的值是字面值, 常量在使用时才能显现出类型以及合法性.
+常量是用标识符代表字面值.
 
 ```
 const (
@@ -963,17 +987,16 @@ var (
 
 ```
 func toString out string
-保留字 func 只声明名字和参数类型
-并且, 参数中只写类型, 不能带参数名
-多个参数间不使用逗号分隔
+保留字 func 只声明过程名字和参数类型, 不给参数命名
 保留字 out 表示之后的参数被输出
+各部分间不使用逗号, 也就是说 func 声明中不允许出现逗号. 
 
 func toInt string out int
 
 proc toString out string s =[
 	保留字 proc 声明带执行体的过程
 	s = 'hello' - s
-	end // end 指示终止过程
+	end		end 终止过程
 ]
 
 pub proc walk func callback int out int, out bool =[
@@ -1043,57 +1066,84 @@ proc fn out int x,y =[ 多个输出参数必须具名
 ##类型声明
 
 使用保留字 type 声明自定义类型.
-Z 中没有别名, 声明类型就是定义类型成员.
+
+前文说过 type 是个根类型, 所以声明一个类型
 
 ```
-type empty =[] 无属性类型
+type T =[] 的意思是 define type T =[]
 
-type fruit ={ 带属性的水果类型
-	bool clean=true		声明属性并赋初值, 无污染初值为真
-	string brand,color	同类型属性列表
-	[string] flavors	口味
+define 不是 Z 的保留字, 所以下面的写法合法
+define (
+	type Type =[
+	]
+
+	type value =[
+	]
+)
+
+去掉括号看上去更接近自然语言
+define
+	pub type A =[]
+	pub proc A.do =[
+	]
+```
+
+类型声明就是定义成员的类型.
+
+```
+type empty =[]				无属性类型
+
+type fruit ={				带属性的水果类型
+	pub static string name	静态属性只被赋值一次
+	bool clean=true			赋初值为真
+	string brand, color		同类型属性列表
+	[string] flavors		多种口味并存
+
+	pub func calculate		属性类型可以是个函数
 }
 
+匿名复合使用前缀保留字 use, apple 复合了 fruit 的所有成员
 type apple ={
-	use fruit[color='red'] 类型复合并且可以设置初值
+	use fruit =[			类型复合并设置初值
+		name='apple',
+		color='red'
+	] 
 }
 
-成员方法是个过程, 这种过程可以叫做 '实例方法'
-proc fruit.isSweet out bool =[
+匿名复合并导出类型 string 的所有成员.
+pub type path =[
+	pub use string
+]
+
+成员方法, 是对 '实例的方法' 声明
+pub proc fruit.isSweet out bool =[
 	out self.flavors isnot null and
 		self.flavors.has('sweet')
 ]
 
-匿名复合, 下例中的 path 导出了类型 string 所有的导出成员.
-type path =[
-	pub use string
-]
-
-给类型定义静态方法, 外部使用时直接用 path.fn('string')
-这种过程可以叫做 '类型方法'
-pub static proc path.last out string dir =[
-	out dir.split('/').slice(-1)
+静态方法, 是对 '类型的方法' 声明, 使用时用 path.fn('string')
+pub static proc path.last out string =[
+	out out.split('/').slice(-1)
 ]
 
 proc path.name out string =[
-	实例方法调用类型方法也可以用 self
-	if self == '/' {
+	类型推导 支持 self 替代第一个匿名复合类型
+	if self == '/' { 等价使用 self.string
 		out '/'
-	}else{
-		out self.last(self)
-		因为 path 只符合了一种类型, 可以直接使用 self
-		否则需要使用 self.last(self.string)
 	}
+	out self.last(self) 等价于
+	out self.last(self.string)
+	
+	更简单的写法
+	out self is '/' and self or self.last(self)
 ]
 ```
 
-Z 中没有 class, 只是简单的类型复合.
-在上例中保留字 self 代指 proc isSweet 的接收类型 fruit.
+Z 中没有 class, 只是简单的类型复合. 保留字 self 代指类型实例或类型本身.
 Z 支持几个特别的属性名可省略 self 进行访问, 当然这首先需要使用者声明这些属性
 
 ```
 type node =[
-	pub static string name	属性可以是静态的, 表示只赋值一次
 	node parent
 	[node] child
 	root this
@@ -1115,6 +1165,37 @@ proc node.fn =[
 ```
 
 注意: Z 只是对 this, parent, child 属性提供了便捷访问方式, 不关心, 也不明白它们与 self 的真正关系.
+
+#类型约束
+
+相对于其它语言中的接口概念, Z 中使用保留字 'as' 进行修饰.
+
+```
+pub type integer =[]
+定义类型 interger, 类似接口概念表示所有的预定义整型.
+事实上预定义整型实现了这些方法
+
+pub func
+	add as integer out as integer
+	mul as integer out as integer
+	div as integer out as integer
+	i8 out i8
+	i16 out i16
+	i32 out i32
+	i64 out i64
+	u8 out u8
+	u16 out u16
+	u32 out u32
+	u64 out u64
+
+显然上面使用了缩进风格, 指的是一组实例方法
+
+使用约束
+pub proc add as integer i, u, out i64 =[
+	out i.add(u).i64()
+]
+```
+
 
 
 [ISO 8601]: https://en.wikipedia.org/wiki/ISO_8601
