@@ -1171,11 +1171,10 @@ proc node.fn =[
 相对于其它语言中的接口概念, Z 中使用保留字 'as' 进行修饰.
 
 ```
-pub type integer =[]
-定义类型 interger, 类似接口概念表示所有的预定义整型.
-事实上预定义整型实现了这些方法
+pub type integer =[] 类似接口表示所有的整型.
 
-pub func
+事实上预定义整型实现了下列方法
+pub func integer =
 	add as integer out as integer
 	mul as integer out as integer
 	div as integer out as integer
@@ -1188,10 +1187,10 @@ pub func
 	u32 out u32
 	u64 out u64
 
-显然上面使用了缩进风格, 指的是一组实例方法
+显然上面使用了分组, 指的是一组实例方法
 
 使用约束
-pub proc add as integer i, u, out i64 =[
+pub proc opAdd as integer i, u, out i64 =[
 	out i.add(u).i64()
 ]
 ```
