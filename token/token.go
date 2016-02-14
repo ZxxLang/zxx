@@ -9,18 +9,7 @@ import "strconv"
 type Token int
 
 const (
-	ILLEGAL Token = iota
-	EOF
-
-	SPACES
-	INDENT
-
-	PLACEHOLDER
-	COMMENT
-
-	LITERAL // 字面值
-
-	operator_beg
+	EOF Token = iota
 	// 运算符
 	DOLLAR // $
 
@@ -63,16 +52,36 @@ const (
 	AND // and
 
 	OR // or
-	operator_end
 
-	// 自成语句的符号
-	ASSIGN // =
-	INC    // ++
-	DEC    // --
+	// 关键字
 
-	// 成对符号
-	LEFT  // [{('"
-	RIGHT // ]})'"
+	USE
+	PUB
+	CONST
+	TYPE
+	STATIC
+	VAR
+	FUNC
+	PROC
+
+	BREAK
+	CASE
+	CONTINUE
+
+	DEFAULT
+	DEFER
+	ELSE
+	FOR
+
+	GO
+	GOTO
+	IF
+
+	MAP
+
+	SWITCH
+
+	OUT
 
 	// 定界
 	COLON     // :
@@ -81,48 +90,42 @@ const (
 
 	DOT // .
 
-	keyword_beg
-	// 关键字
-	BREAK
-	CASE
-	CONST
-	CONTINUE
+	// 自成语句的符号
+	ASSIGN // =
+	INC    // ++
+	DEC    // --
 
-	DEFAULT
-	DEFER
-	ELSE
-	FOR
+	// 成对符号
+	LEFT  // [{(
+	RIGHT // ]})
 
-	FUNC
-	GO
-	GOTO
-	IF
+	SPACES // 连续的空格
+	TABS   // 连续的制表符
 
-	MAP
+	// 需要进行语义识别, 转化
 
-	OUT
-	PROC
-	PUB
-	SWITCH
-	STATIC
-	TYPE
-	USE
-	VAR
+	LITERAL // 字面值
+	IDENT   // 标识符
 
-	keyword_end
+	PLACEHOLDER // 占位
 
-	// 标识符
-	IDENT
+	// 注释
+	COMMENT  // '//'
+	COMMENTS // '---'
+
+	// 换行
+	NL
 )
 
 var tokens = [...]string{
-	ILLEGAL:     "ILLEGAL",
 	EOF:         "EOF",
+	LITERAL:     "LITERAL",
 	PLACEHOLDER: "PLACEHOLDER",
-	INDENT:      "INDENT",
+	TABS:        "TABS",
 	SPACES:      "SPACES",
 	COMMENT:     "COMMENT",
-	LITERAL:     "LITERAL",
+	COMMENTS:    "COMMENTS",
+	NL:          "NEWLINE",
 	DOLLAR:      "$",
 	ANTI:        "~",
 	BITAND:      "&",
@@ -229,28 +232,69 @@ func (op Token) Precedence() int {
 	return 0
 }
 
-var keywords map[string]Token
+var letters map[string]Token // fixed
 
 func init() {
-	keywords = make(map[string]Token)
-	for i := keyword_beg + 1; i < keyword_end; i++ {
-		keywords[tokens[i]] = i
+	letters = make(map[string]Token)
+	for i := EOF + 1; i < LEFT; i++ {
+		letters[tokens[i]] = i
 	}
+	letters["["] = LEFT
+	letters["{"] = LEFT
+	letters["("] = LEFT
+	letters["]"] = RIGHT
+	letters[")"] = RIGHT
+	letters["}"] = RIGHT
 }
 
-// Lookup 识别 ident 对应的 Token 值
-func Lookup(ident string) Token {
-	if tok, is_keyword := keywords[ident]; is_keyword {
+// Lookup 识别字面值 letter 对应的 Token.
+// 适当的调用 Lookup 才有意义.
+func Lookup(letter string) Token {
+	if letter == "" {
+		return EOF
+	}
+
+	if letter[0] == ' ' {
+		return SPACES
+	}
+
+	if letter[0] == '\t' {
+		return TABS
+	}
+
+	if tok, is := letters[letter]; is {
 		return tok
 	}
-	return IDENT
+
+	if letter[0] == '\n' || letter[1] == '\r' {
+		return NL
+	}
+
+	if len(letter) > 1 {
+		if letter[0] == '/' && letter[1] == '/' {
+			return COMMENT
+		}
+	}
+
+	if len(letter) > 2 {
+		if letter[0] == '-' && letter[1] == '-' && letter[2] == '-' {
+			return COMMENTS
+		}
+	}
+
+	return LITERAL
 }
 
-// IsLiteral 返回 tok 是否为字面值标记
-func (tok Token) IsLiteral() bool { return LITERAL == tok }
+// IsAssign 返回 tok 是否为赋值语句的符号 '=','++','--'
+func (tok Token) IsAssign() bool {
+	return tok == ASSIGN || tok == INC || tok == DEC
+}
 
 // IsOperator 返回 tok 是否为操作符
-func (tok Token) IsOperator() bool { return operator_beg < tok && tok < operator_end }
+func (tok Token) IsOperator() bool { return tok >= DOLLAR && tok <= OR }
 
 // IsKeyword 返回 tok 是否为关键字
-func (tok Token) IsKeyword() bool { return keyword_beg < tok && tok < keyword_end }
+func (tok Token) IsKeyword() bool { return tok >= USE && tok <= OUT }
+
+// IsDeclare 返回 tok 是否为声明
+func (tok Token) IsDeclare() bool { return tok >= USE && tok <= PROC }

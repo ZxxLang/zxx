@@ -44,20 +44,21 @@ func (pos Position) String(filename string) string {
 
 // Block 记录包粒度代码块中的文件(包括 hack 覆盖)关系.
 type Block struct {
+	use   string // use 语句中的 block 完全路径
 	files []File
-	uri   string // use 语句中的 block 完全路径
 }
 
 // File 记录文件级别的 block 信息
 type File struct {
-	path  string // 抽象的文件路径
-	nl    string // 换行符
 	index int    // 在 Block.files 中的序号
+	path  string // 抽象文件完全路径
+	nl    string // 换行符
+	src   []byte // 内容
 }
 
-// Code 记录代码块级别的 block 信息.
+// Code 代码块级别的 block 信息.
 // 代码块是个抽象 block, 具体粒度根据需求变化.
 type Code struct {
-	pos, end Position // 开始和结束位置
 	index    int      // 所属 Block.files 中的序号
+	pos, end Position // 开始和结束位置
 }
