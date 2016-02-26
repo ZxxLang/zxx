@@ -25,7 +25,7 @@ var [
 var int a, string b
 
 var (
-	float f = 9.0
+	f32 f = 9.0
 )
 
 var datetime (
@@ -33,7 +33,7 @@ var datetime (
 	orz = 20160202T22:48:33Z
 )
 
-proc hello string word =[
+proc hello string word [
 	echo 'hello ' word
 ]
 
@@ -48,7 +48,6 @@ proc long_function_name =
 
 	Z 没有代码风格规范, 书写者自己说了算. 代码规范令人厌恶.
 	如果 Z 不能识别某种风格代码, 只说明 Z 不够强壮.
-	如果编辑器不能友好的显示, 只说明该编辑器不够强壮.
 
 Z 提供了源码格式化工具, 如果你愿意使用, 上面的代码会转换成下面的样子
 
@@ -63,7 +62,7 @@ var {
 
 var int a, string b
 
-var float f = 9.0
+var f32 f = 9.0
 
 var datetime {
 	day = 20160202
@@ -71,12 +70,12 @@ var datetime {
 	orz = 20160202T22:48:33Z
 }
 
-proc hello string word ={
+proc hello string word {
 	echo 'hello ' word
 }
 
 甚至缩进风格
-proc long_function_name ={
+proc long_function_name {
 	var int _one, _two, _three,
 		_four
 	doSomeThing()
@@ -200,6 +199,19 @@ infinite  无穷大
 
 行首的空格, tab 缩进以及换行符 CR, LF 其实也是字面值.
 
+##缩进
+
+缩进是行首连续的空格 ' ' 或 Tab '\t', 通常用于排版目的.
+
+Z 不支持混用空格和 Tab 的缩进.
+
+也可能书写者喜欢 Python 风格的缩进代码, Z 的解析器会尝试理解这种格式, 并把它当做分组括号对待.
+
+Z 支持类 Python 风格的缩进代码是因为缩进代码能少输入一个括号, 可降低输入量.
+但不保障兼容, 毕竟 Z 不是 Python.
+
+注意: 行首的 '\t' 缩进才是缩进, 行中间出现的 '\t' 缩进被当做尾注释处理
+
 ##占位文本
 
 Z 不能识别语义的文本被当做占位文本处理.
@@ -232,20 +244,22 @@ Z 不能识别语义的文本被当做占位文本处理.
 	[] 通用定界
 
 
-方括号 '[]' 更便于输入, 可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
+方括号 '[]' 更便于输入, 多数情况下可以替代圆括号和花括号. Z 的格式美化工具会替换合适的符号.
 
 ##逗号
 
 逗号 ',' 具有多种用途. 可用来分隔声明, 表达式以及语句.
 
+注意逗号和分号的不同.
+
 ```
-var int x,y = 3+1,6     分隔声明变量, 分隔表达式
-var [int] array = [1,2] 分隔值表达式
+var int x,y = 3+1,6	逗号分隔多个同类型变量
+var [int] = [1,2]	逗号分隔值表达式
 var (
-	int i,string s      分隔声明变量
+	int i;string s	分号分隔一行中多个声明
 )
 
-proc each =[
+proc each [
 	for var int x,y = 0,0; x < 10 ;x++, y = y*x[
 		三段式 `for` 语句中第一, 第三段是语句.
 		echo x,y
@@ -358,8 +372,8 @@ int(0) is null 等价 int(0) == 0
 'string' is null 等价 'string' == ''
 
 数组, 映射和自定义类型没有被赋值时值为 null, 所以
-type empty =[]
-type T=[
+type empty []
+type T [
 	int x
 ]
 
@@ -389,6 +403,9 @@ t1 is null		结果为假
 ##布尔
 
 bool 的字面值为 true 或者 false.
+在内存中, 布尔类型用整数表示, 0 表示 false, 非 0 表示 true, 具体尺寸由编译器决定.
+
+注意: true, false 只是字面值, 是无类型的.
 
 ##整数
 
@@ -426,8 +443,8 @@ var rune e = ''           // 空字符串的 rune 或 byte 值为 0.
 下列类型的长度/尺寸与运行环境有关:
 
 ```
-uint     32 位或 64 位
-int      和 uint 长度一样
+uint     u32 或 u64 的别名
+int      i32 或 i64 的别名
 ```
 
 ##浮点数
@@ -442,25 +459,17 @@ f64     IEEE-754 64  位浮点数
 f128    IEEE-754 128 位浮点数
 ```
 
-下列类型的长度/尺寸与运行环境有关：
-
-```
-`
-float    IEEE-754 32 或 64 位浮点数
-`
-```
-
 ##字符串
 
 string 是一对单引号或者双引号包裹的多行文本.
 字符串连接运算符使用 '+' 或者 '-' , 它们是等价的.
 
 ```
-proc hello out string =[
+proc hello out string [
 	out 'hello'
 ]
 
-proc word out string =[
+proc word out string [
 	out 'word'
 ]
 
@@ -544,27 +553,39 @@ var datetime(
 
 ##数组
 
-数组是预定义类型, 用前缀的方括号表示, 没有单独的保留字标识符.
+array 表示数组类型.
 
 ```
-var [int] a 看上去非常规, 录入却很自然
-var [int] ( 类型分组声明写法
+var array[int] ai	以保留字 array 开头
+var [int] a			可以省略 array 方便录入
+var [int] (			分组写法
 	c
-	d = [ 赋初值就直接写吧
+	d = [			赋初值就直接写吧
 		1,2,3,
-		call() 使用表达式运算结果
+		call()		使用表达式运算结果
 	]
 )
 
 访问数组元素
-var int e = d[0] 直接访问已有的变量
+var int e = d[0]	下标访问
 
-多维数组嵌套中括号即可
+多维数组用嵌套中括号
 
 var [[int]] point =[
 		[1,2,3]
 	]
+
+定长数组
+
+var [int,5] seq
+
+type Seq {
+	array[int,5]	匿名属性定长数组必须用 array
+}
+
+var [Seq,5] seqs
 ```
+
 
 ##映射
 
@@ -587,7 +608,7 @@ var map[type]string types = [ 万能的方括号
 甚至可以使用 type
 var map[type]type assoc = [
 	string: types,
-	int: float
+	int: f32
 ]
 
 访问映射
@@ -615,53 +636,52 @@ Z 是强静态类型语言, 编译后, 所有的类型都是明确的, 可识别
 
 ##注释
 
-注释是对某个标识符或语句体的说明. 注释在 Z 中属于语句, 注释写法.
+注释是对某个标识符或语句体的说明.
 
-1. 尾注释以 '//' 开始, 直到行尾
-2. 块注释以三个以上的减号 '-' 位于一行非空白符之首开始, 并以此结束.
-3. 字符串值注释, 孤立的字符串值也会被当做注释.
-4. 语句尾部以 tab "\t" 开始, 直至行尾
+注释在 Z 中属于语句, 因为注释有明确的格式:
+
+1. Z 中的注释是后置的并紧根语句实体
+2. 双斜线尾注释 以 '//' 开始至行尾, '//' 位于行首是这种写法的特例
+3. 制表符尾注释 非空白字符之后以 "\t" 开始至行尾.
+4. 块注释 以三个以上的减号 '-' 位于一行首个非空白符, 并以此结束.
+5. 多字节注释 因标识符不含多字节字符, 这很容易识别.
 
 ```
-// 这是一条尾注释, 可以分成连续的多行书写.
+// 这两行是占位文本, 虽然样子像尾注释.
 // 纵观整个文本, 无法确定这条注释属于哪个标识符
 
 ---
-这是个块注释, 可以多行书写.
+这两行是占位文本, 虽然样子像块注释.
 纵观整个文本, 无法确定这条注释属于哪个标识符
 ---
 
-因为标识符由英文字符和数字组成
-所以多字节字符开头的注释可以直接写
+因为标识符由英文字符和数字组成, 所以多字节注释可以直接写.
+同理, 这两行依然是占位
 
 The line is a comment.
-上一行英文也是注释, 原因见下文关于声明的描述.
+上一行英文也是占位, 因为 Z 的语句以声明开始, 'The' 不是声明,
+该行未被语句体包裹, 属于顶层占位.
 
-此行注释位于 proc sum 上面, 但不属于 sum 的注释
-proc sum int x,y,out int =[
-	'sum 返回 x+y'	// 此行前部注释归属于标识符 proc sum
+此行位于 proc sum 上面, 但不是注释.
+Z 中的注释是后置的, 这和其它语言不同.
+proc sum int x,y,out int [
+	// comment for 'proc sum'
 	out x add y		result x+y
 
-	注意 'result x+y' 前面有 tab, 所以它是个注释
+	注意 'result x+y' 前面有 '\t', 所以它是尾注释
+	而这两行被之前的空行分断被当做占位
 ]
 
-proc multiByteFriendly out bool =[
+proc multiByteFriendly out bool [
 	使用多字节字符写注释....
 	out true 就是这么直接
 ]
 ```
 
-依惯例, 注释最普遍的作用是生成文档. 从这个角度出发, Z 会忽略那无法确定归属的注释. 能向前归属到某个语句的注释被称作注释, 否则被称作备注. 以免描述时产生歧义.
-
-上例中, 字符串 'sum 返回 x + y' 和尾注释 `result x+y` 语可以追溯归属. 其它的注释仅是备注.
-
-Z 中的注释是后置的, 这和其它语言不同.
-
-Z 中没有注释的注释, 所以注释 'sum 返回 x+y' 尾部的注释仅是备注.
 
 ##赋值语句
 
-赋值语句不存在优先级.
+赋值操作符产生赋值语句.
 
 | 操作符 | 解释   |
 |-------|--------|
@@ -669,75 +689,14 @@ Z 中没有注释的注释, 所以注释 'sum 返回 x+y' 尾部的注释仅是�
 | --    |自赋值减一|
 | =     |赋值     |
 
-前例 `proc` 声明中的 '=' 也是赋值操作符, 值就是过程(函数)执行体本身.
-
-	在 Z 中过程执行体是个值表达式, 它的运算符是 '执行'.
-	只不过 '执行' 本身如果有返回值, 那么就是执行表达式, 否则就是执行语句.
-
-
-```
-proc run ={ 换个定界符
-	var int x
-	proc ={
-		这是个匿名执行体, 无参数无返回值, 并且直接执行了
-		x = 9
-	}() 必须执行它, 不然就成了值表达式, 而不是语句
-
-	proc fn ={
-		具名过程
-	}
-
-	proc noret ={
-		执行无返回值的具名过程
-	}()
-
-	var int x = proc out int ={
-		执行匿名过程, 返回值被接收
-		out 1
-	}()
-
-	下面的写法是非法的
-	'
-	var fn1 = proc ={}	缺少类型声明
-	var proc fn2 ={}	这是什么鬼
-	proc ret out int ={
-		执行了具名过程, 返回值没被接收, 隐含了一个执行表达式
-		表达式不能独立存在
-		out 1
-	}()
-	proc ={
-		匿名执行体, 未被赋值也未被执行, 隐含了一个过程表达式
-		表达式不能独立存在
-	}
-	'
-}
-```
-
-Z 中的匿名过程必须被执行, 因为写不出合法的匿名过程赋值语句.
-
-```
-proc x out int =[
-	out 5
-]
-
-proc noret =[
-]
-
-proc y =[
-	x() 非法, 因为产生了运算结果是个表达式, 表达式不能独立存在.
-
-	discard x() 可使用保留字 discard 丢弃结果形成语句.
-
-	noret() 合法语句, 因为没有产生运算结果.
-]
-```
 
 ##分支语句
 
 有两个标识符可选, 'if' 和 'switch'.
 
 ```
-if expr { 当 expr 的值为真时
+if expr {
+	当 expr 的值为真时
 	// do something
 } else [ 也可以使用方括号包裹执行体
 ]
@@ -847,10 +806,10 @@ var map[type]string types ={
 
 var map[type]type assoc ={
 	string: types,
-	int: float
+	int: f32
 }
 
-proc fn =[
+proc fn [
 	for assoc as t val {
 		if t is int {
 			doSomething()
@@ -885,6 +844,27 @@ Z 源代码总是由下列声明开始的.
 	如果行首用到这些词, 大写首字母或者随便加个非空白符号就行.
 
 
+##引用包
+
+保留字 use 可引用外部包.
+
+```
+引用单包
+use "os"
+use path "path" 别名
+
+引用多包分组写法
+use (
+	"io"
+	path "path/filepath"	别名
+)
+
+紧凑写法
+use ("os", path "path")
+
+```
+
+
 ##导出声明
 
 保留字 static 是对其它声明的修饰.
@@ -904,20 +884,20 @@ static int x = 9				静态变量声明修饰总是省略 'var'
 static datetime day = oneday()	直接调用函数赋值
 pub static string prefix		导出静态字符串变量
 
-proc oneday int interval, out datetime =[
+proc oneday int interval, out datetime [
 	out datetime.now().add(interval)
 ]
 
-proc init =[
+proc init [
 	prefix = 'z' 随便在哪里进行赋值都行
 ]
 
-proc fn ={
+proc fn {
 	static int x = datetime.time()
 	过程内的静态声明
 }
 
-proc setName string val =[
+proc setName string val [
 	static string name
 
 	if name is null {
@@ -929,13 +909,13 @@ proc setName string val =[
 	name = val 最简单的写法, Z 会确保只赋值一次
 ]
 
-proc setOnce string val =[
+proc setOnce string val [
 	static string name = val 最简洁的写法
 ]
 
 声明时直接给属性赋值
 
-type rep ={
+type rep {
 	static string version = '0.0.0'    定值静态属性
 	string host = 'https://github.com' 初值
 }
@@ -996,25 +976,32 @@ func toString out string
 
 func toInt string out int
 
-proc toString out string s =[
+proc toString out string s [
 	保留字 proc 声明带执行体的过程
 	s = 'hello' - s
 	end		end 终止过程
 ]
 
-pub proc walk func callback int out int, out bool =[
+pub proc walk func callback int out int, out bool [
 	这个过程有两个参数, 第一个参数是个函数类型
 	显然 func 参数无逗号的设计显现出作用
 ]
 
 使用函数变量
-proc fn =[
+proc fn [
 	var func f out string 声明函数变量用 func
 	var func c = fn 声明并赋值
 
-	f = proc out string ={ 匿名过程赋值
+	f = proc out string { 匿名过程赋值
 		out = 'hello'
 	}
+
+	var func fn = proc out int {
+		用匿名过程赋值, 直接赋初值可推导参数类型, 否则需要明确参数类型
+		out 1
+	}
+
+	函数声明只明确参数类型, 无参数名, 无逗号保障了定义函数变量
 ]
 ```
 
@@ -1024,6 +1011,64 @@ proc fn =[
 pub func fn	在外部实现, 或在参数中作为类型约束
 
 func call	来自外部连接库, 或被 block 内的过程输出
+```
+
+详细例子
+
+```
+proc run {
+	proc {
+		这是个匿名执行体, 无参数无返回值, 并且直接执行了
+		x = 9
+	}() 必须执行它, 不然就成了值表达式, 而不是语句
+
+	proc fn {
+		具名子过程
+	}
+
+	proc noret {
+		执行无返回值的具名过程
+	}()
+
+	var int x = proc out int {
+		执行匿名过程, 返回值被接收
+		out 1
+	}()
+
+	--- 以下非法
+	var fn1 = proc {}	缺少类型声明
+	var proc fn2 {}	这是什么鬼
+	proc ret out int {
+		执行了具名过程, 返回值没被接收, 隐含了一个执行表达式
+		表达式不能独立存在
+		out 1
+	}()
+	proc {
+		匿名执行体, 未被赋值也未被执行, 隐含了一个过程表达式
+		表达式不能独立存在
+	}
+	---
+}
+```
+
+过程返回值与表达式和语句的关系
+
+```
+proc x out int {
+	out 5
+}
+
+proc noret {}
+
+proc y {
+	x() 非法, 因为产生了运算结果是个表达式, 表达式不能独立存在.
+
+	discard x() 用保留字 discard 丢弃结果形成语句.
+
+	noret() 合法语句, 因为没有产生运算结果.
+
+	noret[] 输入源码时可以用方括号替代圆括号执行过程
+}
 ```
 
 关于过程:
@@ -1036,7 +1081,7 @@ func call	来自外部连接库, 或被 block 内的过程输出
 6. 过程体中 out 既可以替代输出参数, 也可以用作返回语句
 
 ```
-proc one out int =[ 省略唯一的输出参数名
+proc one out int [ 省略唯一的输出参数名
 	if out is null [
 		out = 1 赋值语句
 	]
@@ -1044,7 +1089,7 @@ proc one out int =[ 省略唯一的输出参数名
 	out out		合法但不简洁, 其它语言写作 return out
 ]
 
-proc fn out int x,y =[ 多个输出参数必须具名
+proc fn out int x,y [ 多个输出参数必须具名
 	out.x = 1
 	out.y = 2
 	可把 out 当做对象用
@@ -1073,30 +1118,15 @@ proc fn out int x,y =[ 多个输出参数必须具名
 前文说过 type 是个根类型, 所以声明一个类型
 
 ```
-type T =[] 的意思是 define type T =[]
-
-define 不是 Z 的保留字, 所以下面的写法合法
-define (
-	type Type =[
-	]
-
-	type value =[
-	]
-)
-
-去掉括号看上去更接近自然语言
-define
-	pub type A =[]
-	pub proc A.do =[
-	]
+type T {} 声明类型 T, 在 {} 中定义属性.
 ```
 
 类型声明就是定义成员的类型.
 
 ```
-type empty =[]				无属性类型
+type empty {}				无属性类型
 
-type fruit ={				带属性的水果类型
+type fruit {				带属性的水果类型
 	pub static string name	静态属性只被赋值一次
 	bool clean=true			赋初值为真
 	string brand, color		同类型属性列表
@@ -1106,7 +1136,7 @@ type fruit ={				带属性的水果类型
 }
 
 匿名复合使用前缀保留字 use, apple 复合了 fruit 的所有成员
-type apple ={
+type apple {
 	use fruit =[			类型复合并设置初值
 		name='apple',
 		color='red'
@@ -1114,22 +1144,22 @@ type apple ={
 }
 
 匿名复合并导出类型 string 的所有成员.
-pub type path =[
+pub type path [
 	pub use string
 ]
 
 成员方法, 是对 '实例的方法' 声明
-pub proc fruit.isSweet out bool =[
+pub proc fruit.isSweet out bool [
 	out self.flavors isnot null and
 		self.flavors.has('sweet')
 ]
 
-静态方法, 是对 '类型的方法' 声明, 使用时用 path.fn('string')
-pub static proc path.last out string =[
+静态方法, 是对 '类型的方法' 声明, 使用时用 path.last()
+pub static proc path.last out string [
 	out out.split('/').slice(-1)
 ]
 
-proc path.name out string =[
+proc path.name out string [
 	类型推导 支持 self 替代第一个匿名复合类型
 	if self == '/' { 等价使用 self.string
 		out '/'
@@ -1146,21 +1176,21 @@ Z 中没有 class, 只是简单的类型复合. 保留字 self 代指类型实�
 Z 支持几个特别的属性名可省略 self 进行访问, 当然这首先需要使用者声明这些属性
 
 ```
-type node =[
+type node [
 	node parent
 	[node] child
 	root this
 ]
 
-type root =[
+type root [
 	use node
 ]
 
-proc root.count out int =[
+proc root.count out int [
 	out child.length()
 ]
 
-proc node.fn =[
+proc node.fn [
 	if this.count() [
 		// do something
 	]
@@ -1174,10 +1204,10 @@ proc node.fn =[
 相对于其它语言中的接口概念, Z 中使用保留字 'as' 进行修饰.
 
 ```
-pub type integer =[] 类似接口表示所有的整型.
+pub type integer [] 类似接口表示所有的整型.
 
 事实上预定义整型实现了下列方法
-pub func integer =
+pub func integer {
 	add as integer out as integer
 	mul as integer out as integer
 	div as integer out as integer
@@ -1189,15 +1219,15 @@ pub func integer =
 	u16 out u16
 	u32 out u32
 	u64 out u64
+}
 
 显然上面使用了分组, 指的是一组实例方法
 
 使用约束
-pub proc opAdd as integer i, u, out i64 =[
+pub proc opAdd as integer i, u, out i64 [
 	out i.add(u).i64()
 ]
 ```
-
 
 
 [ISO 8601]: https://en.wikipedia.org/wiki/ISO_8601

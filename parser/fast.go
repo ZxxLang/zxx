@@ -1,90 +1,92 @@
-// Copyright 2016 The Zxx Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package parser
 
 import (
 	"errors"
 
-	"github.com/ZxxLang/zxx/ast"
 	"github.com/ZxxLang/zxx/scanner"
 	"github.com/ZxxLang/zxx/token"
 )
 
-func symbolIfy(s string, ok bool) string {
-	return s
+// Symbol
+type Symbol struct {
+	Pos    scanner.Pos
+	Tok    token.Token
+	Source string
 }
 
-// Parse 解析, 转换, 合并 zxx 源码 src 中的 Token 到 ast.File.
+// Fast 快速解析, 转换, 合并 zxx 源码 src 中的 Token.
 //
-// 转化细节:
+// 参数 rec 用于逐个接收解析到的 Token.
+// 如果 rec 为 nil, 返回值 nodes 包含所有的 Token.
 //
-// 	COMMENT     替代 COMMENTS
-// 	VALFLOAT    替代 NAN, INFINITE
-// 	VALBOOL     替代 TRUE, FALSE
-// 	INDENTATION 替代行首的 SPACES, TABS
-// 	忽略 Token 之间 SPACES
+// 缺陷:
+//
+// Fast 通过分析源码缩进判断顶层占位, 这可能对英文(非多字节)开始的顶层占位有影响.
+// 常规的缩进或用 '//', '---' 开始英文顶层占位可以弥补缺陷.
+//
+func Fast(src []byte, rec func(scanner.Pos, token.Token, string) error) (nodes []Symbol, err error) {
 
-//	干净的源码没有多余的占位和注释, 解析过程就是选取干净的 Token 构成当前节点.
-//	缩进, 占位, 注释,间隔符号, 分号, 换行只是被保存, 永远不会成为当前节点.
-//	逗号, 分号, 换行用于产生 FFinal 标记, 并切换当前节点.
-//
-func Parse(src []byte, file *ast.File) (err error) {
-	var (
-		tabKind bool // 缩进风格
-	)
+	if rec == nil {
+		nodes = make([]Symbol, 0, len(src)/10)
+		rec = func(pos scanner.Pos, tok token.Token, code string) error {
+			nodes = append(nodes, Symbol{pos, tok, code})
+			return nil
+		}
+	}
 
+	tabKind := false
+	isTop := true
 	scan := scanner.New(src)
+
 	for err == nil && !scan.IsEOF() {
+		var tok token.Token
+
 		pos := scan.Pos()
 		code, ok := scan.Symbol()
 
 		if !ok {
 			err = errors.New("invalid UTF-8 encode")
-			break
+			return
 		}
 
-		tok := token.Lookup(code)
+		prev := tok
+		tok = token.Lookup(code)
 
-		// 根节点, 只包含声明和占位, 非声明都转换为占位
-		if file.Active == file {
+		if isTop {
+			isTop = false
 			if !tok.As(token.Declare) {
-				// 占位扫描
 				var tmp string
+				posi := pos
 				for ok && tok != token.EOF && !tok.As(token.Declare) {
 					code += scan.Tail(true) + tmp
 					pos = scan.Pos()
 					tmp, ok = scan.Symbol()
 					tok = token.Lookup(tmp)
 				}
+
 				if !ok {
 					err = errors.New("invalid UTF-8 encode")
-					break
+					return
 				}
-
-				if err = file.Push(pos, token.PLACEHOLDER, code); err != nil {
-					break
-				}
+				err = rec(posi, token.PLACEHOLDER, code)
 				code = tmp
 			}
-			err = file.Push(pos, tok, code)
+			if err == nil {
+				err = rec(pos, tok, code)
+			}
 			continue
 		}
 
-		last := file.Last
-		// 脏 Token 全部由 File 解决, 并且不影响当前节点
-		//
 		switch tok {
 
 		case token.SPACES:
 			// 不支持 SPACES, TABS 混搭缩进
-			if last.Token() == token.INDENTATION ||
-				tabKind && last.Token() == token.NL {
+			if prev == token.INDENTATION ||
+				tabKind && prev == token.NL {
 				err = errors.New("parser: bad indentation style for TABS + SPACES")
-				continue
+				return
 			}
-			if last.Token() == token.NL {
+			if prev == token.NL {
 				tok = token.INDENTATION
 				break
 			}
@@ -92,11 +94,11 @@ func Parse(src []byte, file *ast.File) (err error) {
 			continue
 
 		case token.TABS:
-			if last.Token() == token.INDENTATION {
+			if prev == token.INDENTATION {
 				err = errors.New("parser: bad indentation style for SPACES + TABS")
-				continue
+				return
 			}
-			if last.Token() == token.NL {
+			if prev == token.NL {
 				tok = token.INDENTATION
 				tabKind = true
 			} else {
@@ -105,7 +107,7 @@ func Parse(src []byte, file *ast.File) (err error) {
 				tok = token.COMMENT
 			}
 		case token.COMMENT:
-			err = file.Push(pos, tok, code+scan.Tail(false))
+			err = rec(pos, tok, code+scan.Tail(false))
 			continue
 		case token.COMMENTS:
 			// 完整块注释
@@ -119,16 +121,14 @@ func Parse(src []byte, file *ast.File) (err error) {
 			}
 			if tok != token.COMMENTS {
 				err = errors.New("parser: COMMENTS is incomplete")
-			} else {
-				err = file.Push(pos, tok, code+scan.Tail(false))
+				return
 			}
+			err = rec(pos, tok, code+scan.Tail(false))
 			continue
-		case token.DOT: // MEMBER, SUGAR
 		case token.TRUE, token.FALSE:
 			tok = token.VALBOOL
 		case token.NAN, token.INFINITE:
 			tok = token.VALFLOAT
-		// case token.NULL:
 		case token.PLACEHOLDER:
 			// 识别语义, 只剩下字面值和标识符, 成员
 			if code == "\"" || code == "'" {
@@ -136,7 +136,7 @@ func Parse(src []byte, file *ast.File) (err error) {
 				code += scan.EndString(code == "\"")
 				if scan.IsEOF() {
 					err = errors.New("parser: string is incomplete")
-					continue
+					return
 				}
 				tok = token.VALSTRING
 				break
@@ -182,10 +182,7 @@ func Parse(src []byte, file *ast.File) (err error) {
 				}
 			}
 		}
-
-		if err == nil {
-			err = file.Push(pos, tok, code)
-		}
+		err = rec(pos, tok, code+scan.Tail(false))
 	}
 	return
 }

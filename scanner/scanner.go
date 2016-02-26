@@ -11,9 +11,11 @@ type scanner struct {
 	src []byte // source
 
 	size   int
-	offset int  // 当前扫描所处 src 的字节偏移量
-	nl     byte // 换行风格 0 未知, '\n' LF, ' \r' CR, 其他 CRLF
+	offset int // 当前扫描所处 src 的字节偏移量
+	nl     uint16
 }
+
+type Pos int
 
 // New 返回一个 scanner 并进行一些前期处理.
 // 如果有 BOM 头则移动当前位置到 BOM 之后, scanner.Pos() 一定为 3.
@@ -27,13 +29,25 @@ func New(source []byte) (scan *scanner) {
 	return scan
 }
 
-func (s *scanner) Pos() int {
-	return s.offset
+func (s *scanner) Pos() Pos {
+	return Pos(s.offset)
+}
+
+func (s *scanner) IsEOF() bool {
+	return s.offset >= s.size
+}
+
+// Eol 返回 uint16 表示的换行符
+//	0   未确定
+//	10  LF   风格 "\n"   0xa
+//	13  CR   风格 "\r"   0xd
+//	218 CRLF 风格 "\r\n" 0xda
+func (s *scanner) Eol() uint16 {
+	return s.nl
 }
 
 // Rune 返回当前位置的 rune 和 UTF-8 编码长度, 并前进 size 个字节.
-// 如果 size  < 0, 表示编码错误
-// 如果 size == 0, 表示扫描结束
+// 如果 r == 0 && size == 0 , 表示扫描结束
 func (s *scanner) Rune() (r rune, size int) {
 	if s.offset >= s.size {
 		return
@@ -41,32 +55,30 @@ func (s *scanner) Rune() (r rune, size int) {
 
 	r, size = utf8.DecodeRune(s.src[s.offset:])
 	if r == utf8.RuneError {
-		size = -1
 		return
 	}
-	s.size += size
+	s.offset += size
 	return
 }
 
-// Symbol 返回易于解析的 zxx 语义符号, 并前进.
+// Symbol 返回易于识别的字符串, 并前进.
 // 如果 ok == false, 表示编码错误
-// symbol:
-//	'' 表示扫描结束
-//	换行符 '\n', '\r', '\r\n'
-//	两个以上的 ' ', '\t', '/','--','++'
-//	[a-zA-Z_]+[a-zA-Z_0-9]*
-//	[0-9]+[a-zA-Z_0-9\.]*
-//	两字符的 Zxx 运算符, 操作符
-//	单字符的 Zxx 运算符, 定界符, 单双引号
-//  多字节字符直到行尾
 //
-// 注意 symbol 未考虑上下文结合性. 合理的使用 symbol 才有意义.
+// symbol 值:
+//
+//	"" 表示扫描结束
+//	连续的			' ', '\t', '/', '-', '+', '\n', '\r', '\r\n'
+//	两个字符		运算符, 操作符
+//	单个字符		运算符, 定界符, 单双引号
+//  多字节字符		直到行尾
+//	连续的字符		直到空白, 运算符, 操作符, 定界符, 换行
+//  连续的成员		a.b.c
 func (s *scanner) Symbol() (symbol string, ok bool) {
 	offset := s.offset
 	r, size := s.Rune()
 
-	ok = size >= 0
-	if !ok || r == 0 {
+	ok = size > 0
+	if !ok || r == utf8.RuneError {
 		return
 	}
 
@@ -86,19 +98,23 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 
 	c := byte(r)
 
-	nc := s.src[s.offset]
-
 	switch c {
-	case '\r', '\n': // 识别换行风格
+	case '\r', '\n': // 连续的换行
+		nc := s.src[s.offset]
+		// 识别换行风格
 		if s.nl == 0 {
-			s.nl = nc
+			s.nl = uint16(c)
+			if nc != c && (nc == '\r' || nc == '\n') {
+				s.nl = s.nl<<8 + uint16(nc)
+			}
 		}
-		if c != nc && s.nl == nc {
+
+		for s.offset != s.size && (nc == '\r' || nc == '\n') {
+			nc = s.src[s.offset]
 			s.offset++
-			symbol = string(s.src[offset:s.offset])
-		} else {
-			symbol = string(c)
 		}
+
+		symbol = string(s.src[offset:s.offset])
 
 	case ' ', '\t': // 连续的
 
@@ -109,7 +125,7 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 		symbol = string(s.src[offset:s.offset])
 
 	case '-', '/': // 可后跟 '=' 或者连续多个的
-		if nc == '=' {
+		if s.src[s.offset] == '=' {
 			s.offset++
 		} else {
 			for s.offset != s.size && s.src[s.offset] == c {
@@ -118,29 +134,74 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 		}
 		symbol = string(s.src[offset:s.offset])
 
-	case '&', '|', '!', '~', '=': // 可后跟 '='
-		if nc == '=' {
+	case '&', '|', '!', '~', '*', '=': // 可后跟 '='
+		if s.src[s.offset] == '=' {
 			s.offset++
 		}
 		symbol = string(s.src[offset:s.offset])
 
 	case '>', '<', '+': // 可后跟 '=', 或者重复一个
-		if nc == '=' || nc == c {
+		if s.src[s.offset] == '=' || s.src[s.offset] == c {
 			s.offset++
 		}
 		symbol = string(s.src[offset:s.offset])
 
 	case '"', '\'', '{', '}', '(', ')', '[', ']': // 单个
 		symbol = string(c)
-	default: // 直到非 [a-zA-Z_0-9] 结束
-		// [a-zA-Z_]+[a-zA-Z_0-9]*
-		// [0-9]+[a-zA-Z_0-9\.]*
-		for s.offset != s.size &&
-			(nc >= 'a' && nc <= 'z' || nc >= 'A' && nc <= 'Z' ||
-				nc >= '0' && nc <= '9' || nc == '_' || nc == '.') {
+	default:
+		// 不严格的判断 integer, float, datetime, 标识符
+		var num byte
+		if c >= '0' && c <= '9' {
+			num = 3 // 三种可能 integer, float, datetime
+		} else if c >= 'a' && c <= 'z' || c >= 'Z' && c <= 'Z' || c == '_' {
+			num = 1 // 标识符
+		}
 
-			s.offset++
-			nc = s.src[s.offset]
+		for s.offset != s.size {
+
+			switch s.src[s.offset] {
+			default:
+				s.offset++
+				continue
+			case '.':
+				if num == 3 {
+					num = 'f' // float
+					s.offset++
+					continue
+				}
+				if num != 1 {
+					break
+				}
+				// 成员写法
+				s.offset++
+				if s.offset != s.size {
+					c = s.src[s.offset]
+					if !(c >= 'a' && c <= 'z' || c >= 'Z' && c <= 'Z' || c == '_') {
+						s.offset--
+						break
+					}
+				}
+				continue
+			case ':':
+				if num == 3 {
+					num = 'd' // datetime
+					s.offset++
+					continue
+				}
+			case '+':
+				if num == 'd' || num == 'f' {
+					s.offset++
+					continue
+				}
+			case
+				' ', '\t', ',',
+				'-', '/', '*',
+				'&', '|', '!', '~', '=',
+				'>', '<',
+				'{', '}', '(', ')', '[', ']',
+				'\r', '\n':
+			}
+			break
 		}
 		symbol = string(s.src[offset:s.offset])
 	}
@@ -149,14 +210,20 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 }
 
 // Tail 返回当前位置到行尾的字符串.
-// 如果返回值为 "" 表示扫描结束
+// 如果参数 nl 为 true, 返回字符讲包含连续的换行符.
+// 如果当前位置已经是换行, 那么会返回 "".
 // 该方法不检查非法 UTF-8 编码, 下一个符号将是换行符或 EOF.
-func (s *scanner) Tail() string {
+func (s *scanner) Tail(nl bool) string {
 	offset := s.offset
 
 	for s.offset < s.size && s.src[s.offset] != '\n' && s.src[s.offset] != '\r' {
 		s.offset++
 	}
+
+	for nl && (s.src[s.offset] == '\n' || s.src[s.offset] == '\r') {
+		s.offset++
+	}
+
 	return string(s.src[offset:s.offset])
 }
 
