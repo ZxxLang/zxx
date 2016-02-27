@@ -30,9 +30,10 @@ func init() {
 	// r_left  = Term{token.LEFT}
 	// r_right = Term{token.RIGHT}
 
-	z_mnl := Zero{Term{token.NL, token.EMPTYLINE}}
+	z_nl := Zero{Term{token.NL}}
 	t_comma := Term{token.NL, token.COMMA}
-	t_semi := Term{token.NL, token.COMMA}
+	t_semi := Term{token.NL, token.SEMICOLON}
+	t_ident := Term{token.IDENT}
 
 	r_type := Seq(
 		Term{token.TYPE},
@@ -43,18 +44,18 @@ func init() {
 		Term{token.USE},
 		Any(
 			Seq(
-				Zero{Term{token.IDENT}},
-				Term{token.VALSTRING},
-			),
-			Seq(
 				Term{token.LEFT},
 				More(Seq(
-					z_mnl,
-					Zero{Term{token.IDENT}},
+					z_nl,
+					Zero{t_ident},
 					Term{token.VALSTRING},
 					Zero{t_comma},
 				)),
 				Term{token.RIGHT},
+			),
+			Seq(
+				Zero{t_ident},
+				Term{token.VALSTRING},
 			),
 		),
 	)
@@ -65,7 +66,7 @@ func init() {
 			r_type,
 			Seq(
 				Term{token.LEFT},
-				More(Seq(z_mnl, r_type, t_comma)),
+				More(Seq(z_nl, r_type, t_comma)),
 				Term{token.RIGHT},
 			),
 			t_semi,
@@ -92,22 +93,25 @@ func init() {
 	good = []ns{
 		nsr(2, `use 'b'`, r_decl_use),
 		nsr(3, `use a 'b'`),
-		nsr(4, `use a 'b' 'd'`),
-		nsr(5, `use a 'b' c 'd'`),
 		nsr(4, `use ('b')`),
 		nsr(5, `use (a 'b')`),
 		nsr(5, `use ( 'b',)`),
-		nsr(7, `use (a 'b' c 'd')`),
+		nsr(8, `use (a 'b', c 'd')`),
 		nsr(7, "use (\na 'b'\n)"),
 		nsr(8, "use (\n\ta 'b',\n\t)"),
 		nsr(7, `use ( 'b', c 'd')`),
-		nsr(7, "use ( 'b'\nc 'd')"),
+		nsr(8, "use ( 'b',\nc 'd')"),
 		nsr(8, "use ( 'b',\n\tc 'd')"),
-		nsr(10, "use (\n\n\na 'b',\n\n\tc 'd/e'\n\n\t)"),
+		nsr(11, "use (世界\n\n你好\na 'b',\n\n\tc 'd/e'\n\n\t)", r_decl_use),
 	}
 
 	bad = []ns{
 		nsr(1, `use`, r_decl_use),
+		nsr(2, `use a`),
+		nsr(2, `use (a,'d')`),
+		nsr(5, `use a 'b' c 'd'`),
+		nsr(6, `use a 'b', c 'd'`),
+		nsr(7, "use ( 'b'\n, c 'd')"),
 	}
 }
 
@@ -119,8 +123,9 @@ func Test_good(t *testing.T) {
 		}
 		n, tok := testParse(ns.s, r)
 		if n != ns.n || tok != token.EOF || !r.Ok() {
-			t.Fatal(i, n, ns.s, tok)
+			t.Fatal(i, n, ns.s, tok, r.Ok())
 		}
+		r.Reset()
 	}
 }
 
@@ -139,18 +144,25 @@ func Test_bad(t *testing.T) {
 }
 
 func testParse(src string, r Rule) (n int, tok token.Token) {
+	nl := false
 	parser.Fast(
 		[]byte(src),
 		func(_ scanner.Pos, t token.Token, _ string) error {
 			tok = t
 
+			// 去占位节点
 			if tok == token.EOF || tok > token.IDENT {
 				return nil
 			}
 
-			eat, clear := r.Eat(tok)
+			if nl && tok == token.NL { // 合并连续的换行
+				return nil
+			}
+			nl = tok == token.NL
 
-			if eat == 0 && !clear {
+			eat, _ := r.Eat(tok)
+
+			if eat != 1 {
 				return io.ErrNoProgress
 			}
 			n++
