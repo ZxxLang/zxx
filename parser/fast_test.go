@@ -1,20 +1,46 @@
 package parser_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ZxxLang/zxx/parser"
 )
 
-func Test_Fast(t *testing.T) {
-	nodes, err := parser.Fast([]byte(code))
-	if err != nil {
-		t.Fatal(err)
-	}
+var good [][]string = [][]string{
+	[]string{
+		`use a 'b'`,
+		`use`, `a`, `'b'`,
+	},
+	[]string{
+		`use (a 'b')`,
+		`use`, `(`, `a`, `'b'`, `)`,
+	},
+	[]string{
+		`use( a 'b') `,
+		`use`, `(`, `a`, `'b'`, `)`,
+	},
+	[]string{
+		`use( a'b' )`,
+		`use`, `(`, `a`, `'b'`, `)`,
+	},
+}
 
-	for _, n := range nodes {
-		fmt.Println(n.Pos, n.Tok, n.Source)
+func Test_eq(t *testing.T) {
+	for _, ss := range good {
+		nodes, err := parser.Fast([]byte(ss[0]), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(nodes) != len(ss)-1 {
+			t.Fatal(nodes)
+		}
+		ss = ss[1:]
+
+		for i, n := range nodes {
+			if ss[i] != n.Source {
+				t.Fatal(n)
+			}
+		}
 	}
 }
 

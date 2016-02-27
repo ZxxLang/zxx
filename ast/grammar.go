@@ -3,69 +3,173 @@ package ast
 import "github.com/ZxxLang/zxx/token"
 
 // 词法轻规则, 配合些许 Resolve 代码完成构建
+// 所有的规则必须能吃掉一个 Token 才能继续
 
-type rule interface {
-	pass(token.Token) (eat int, pass bool)
+// Factor 代表规则的因子
+type Factor interface {
+	Token() token.Token
 }
 
-// term 包装 Token, Alternative 规则
-type term []token.Token
+type Rule interface {
+	// Eat 返回 Rule 匹配的情况.
+	//
+	// n	表示前 n 个 token 被匹配
+	// want	表示是否期望更多的 Factor
+	Eat(tok Factor) (n int, want bool)
 
-func (r term) pass(tok token.Token) (int, bool) {
+	// Reset 重置规则, 清除过往留下的失败标记
+	Reset()
+
+	// Ok 返回规则是否被完整匹配
+	Ok() bool
+}
+
+// Term 包装 Factor, 使用 Alternative 规则, 最多吃掉一个 Token
+type Term []Factor
+
+func (r Term) Eat(tok Factor) (int, bool) {
 	for _, t := range r {
-		if token.Token(t).As(tok) {
-			return 1, true
+		if t.Token().Has(tok.Token()) {
+			return 1, false
 		}
 	}
 	return 0, false
 }
 
-// 零次或一次
-type zero term
-
-func (r zero) pass(tok token.Token) (int, bool) {
-	eat, pass := rule(r).pass(tok)
-	if pass && eat != 0 {
-		return 1, true
-	}
-	return 0, true
+// Zero 吃掉零个或一个 Token
+type Zero struct {
+	Term
 }
 
-// 一次或多次
-type more term
+func (r Zero) Eat(tok Factor) (int, bool) {
+	n, _ := r.Term.Eat(tok)
+	return n, false
+}
 
-func (r more) pass(tok token.Token) (int, bool) {
-	_, pass := rule(r).pass(tok)
-	if !pass {
+// more 的实现方法可能会改变, 不导出
+type more struct {
+	Rule
+}
+
+// More 重复匹配规则, 吃掉一个或者多个 Token
+func More(r Rule) Rule {
+	return more{r}
+}
+
+func (r more) Eat(tok Factor) (int, bool) {
+	n, _ := r.Rule.Eat(tok)
+	return n, n != 0
+}
+
+// Any 使用 Alternative 规则, 最多吃掉一个 Token
+// Any 和 Term 只是元素类型的不同.
+type alternative struct {
+	Rules []Rule
+	Pos   int // sequence 会维护 Pos 归零.
+	//ok    bool
+}
+
+func Any(rule ...Rule) Rule {
+	return &alternative{Rules: rule}
+}
+
+// sequence
+type sequence struct {
+	Rules []Rule
+	Pos   int // sequence 会维护 Pos 归零.
+	//ok    bool
+}
+
+// Seq 执行 Concatenation 规则, 顺序匹配 rule
+func Seq(rule ...Rule) Rule {
+	return &sequence{Rules: rule}
+}
+
+func (q *alternative) Eat(tok Factor) (int, bool) {
+	size := len(q.Rules)
+	if q.Pos == size {
+		q.Pos = 0
+	}
+	for q.Pos < size {
+		r := q.Rules[q.Pos]
+		n, w := r.Eat(tok)
+
+		if n != 0 {
+			return n, w
+		}
+
+		if !w { // Zero
+			q.Pos++
+			continue
+		}
 		return 0, false
 	}
-	return -1, true
+
+	return 0, false
 }
 
-// queue 执行 Concatenation 规则, 顺序通过匹配
-type queue struct {
-	rules []rule
-	at    int
-}
-
-func (q *queue) pass(tok token.Token) (int, bool) {
-	if q.at >= len(q.rules) {
-		q.at = 0
+func (q *sequence) Eat(tok Factor) (int, bool) {
+	size := len(q.Rules)
+	if q.Pos == size {
+		q.Pos = 0
 	}
+	for q.Pos < size {
+		r := q.Rules[q.Pos]
+		n, w := r.Eat(tok)
 
-	for q.at < len(q.rules) {
-		eat, pass := q.rules[q.at].pass(tok)
-		if !pass {
-			return 0, false
+		if n == 1 {
+			q.Pos++
+			return 1, w
 		}
-		switch eat {
-		case 0:
-			q.at++
+
+		if !w {
+			q.Pos++
 			continue
-		case 1:
-			q.at++
-			return 1, true
+		}
+
+		q.Pos = 0
+		return 0, false
+	}
+
+	if q.Pos == size {
+		return 1, false
+	}
+
+	return 0, false
+}
+
+func (r Term) Reset()   {}
+func (r Term) Ok() bool { return false }
+func (r Zero) Ok() bool { return true }
+
+func (q *alternative) Reset() {
+	if q.Pos != len(q.Rules) {
+		q.Rules[q.Pos].Reset()
+		q.Pos = len(q.Rules)
+	}
+}
+
+func (q *sequence) Reset() {
+	if q.Pos != len(q.Rules) {
+		q.Rules[q.Pos].Reset()
+		q.Pos = len(q.Rules)
+	}
+}
+
+func (q *alternative) Ok() bool {
+	for i := q.Pos; i < len(q.Rules); i++ {
+		if !q.Rules[i].Ok() {
+			return false
 		}
 	}
-	return 0, true
+	return true
+}
+
+func (q *sequence) Ok() bool {
+	for i := q.Pos; i < len(q.Rules); i++ {
+		if !q.Rules[i].Ok() {
+			return false
+		}
+	}
+	return true
 }

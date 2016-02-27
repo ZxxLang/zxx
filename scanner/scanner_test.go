@@ -1,23 +1,28 @@
 package scanner_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/ZxxLang/zxx/scanner"
 )
 
-const code = `
-a.b.c
-1+2
-a+b*c/d*=*e
-a().b.c
-`
+type seq []string
 
-func TestEcho(t *testing.T) {
-	scan := scanner.New([]byte(code))
-	code, ok := scan.Symbol()
-	for ; ok; code, ok = scan.Symbol() {
-		fmt.Println(code)
+var good []seq = []seq{
+	seq{
+		`use a 'b'`,
+		`use`, ` `, `a`, ` `, `'`, `b`, `'`,
+	},
+}
+
+func Test_eq(t *testing.T) {
+	for _, ss := range good {
+		scan := scanner.New([]byte(ss[0]))
+		for _, s := range ss[1:] {
+			code, ok := scan.Symbol()
+			if !ok || s != code {
+				t.Fatal(ok, s, code)
+			}
+		}
 	}
 }

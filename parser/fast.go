@@ -16,41 +16,115 @@ type Symbol struct {
 
 // Fast 快速解析, 转换, 合并 zxx 源码 src 中的 Token.
 //
-// 参数 rec 用于逐个接收解析到的 Token.
-// 如果 rec 为 nil, 返回值 nodes 包含所有的 Token.
+// 参数 rec 用于逐个接收解析到的 Token, 包括 EOF.
+// 如果 rec 为 nil, 返回值 nodes 包含所有的 Token, 不包括 EOF.
 //
 // 缺陷:
 //
 // Fast 通过分析源码缩进判断顶层占位, 这可能对英文(非多字节)开始的顶层占位有影响.
 // 常规的缩进或用 '//', '---' 开始英文顶层占位可以弥补缺陷.
 //
-func Fast(src []byte, rec func(scanner.Pos, token.Token, string) error) (nodes []Symbol, err error) {
+func Fast(src []byte, cb func(scanner.Pos, token.Token, string) error) (nodes []Symbol, err error) {
+	var eml, indent string
+	var delay, tok, prev token.Token
 
-	if rec == nil {
+	if cb == nil {
 		nodes = make([]Symbol, 0, len(src)/10)
-		rec = func(pos scanner.Pos, tok token.Token, code string) error {
-			nodes = append(nodes, Symbol{pos, tok, code})
-			return nil
+	}
+
+	rec := func(pos scanner.Pos, tok token.Token, code string) (err error) {
+		// 合并空白行和占位为 PLACEHOLDER
+		switch tok {
+		case token.NL:
+			if delay == token.EOF {
+				delay = token.PLACEHOLDER
+				break
+			}
+			if prev == tok {
+				eml += code
+				if delay == token.EOF {
+					delay = token.NL
+				} else {
+					delay = token.PLACEHOLDER
+				}
+				return
+			}
+
+			if prev == token.INDENTATION {
+				eml += code
+				delay = token.PLACEHOLDER
+				return
+			}
+
+			break
+		case token.PLACEHOLDER, token.COMMENT:
+			if prev == token.INDENTATION {
+				eml += indent
+				indent = ""
+			}
+			eml += code
+			delay = token.PLACEHOLDER
+			return
+		case token.INDENTATION:
+			indent = code
+			return
 		}
+
+		if eml != "" {
+			if cb == nil {
+				nodes = append(nodes, Symbol{pos.Offset(-len(eml)), token.PLACEHOLDER, eml})
+			} else {
+				err = cb(pos.Offset(-len(eml)), token.PLACEHOLDER, eml)
+				if err != nil {
+					return
+				}
+			}
+			eml = ""
+		}
+
+		if prev == token.INDENTATION {
+			if cb == nil {
+				nodes = append(nodes, Symbol{pos.Offset(-len(indent)), token.INDENTATION, indent})
+			} else {
+				err = cb(pos.Offset(-len(indent)), token.INDENTATION, indent)
+				if err != nil {
+					return
+				}
+			}
+			indent = ""
+		}
+
+		if cb == nil {
+			nodes = append(nodes, Symbol{pos, tok, code})
+		} else {
+			err = cb(pos, tok, code)
+		}
+		return
 	}
 
 	tabKind := false
 	isTop := true
 	scan := scanner.New(src)
 
-	for err == nil && !scan.IsEOF() {
-		var tok token.Token
+	for err == nil {
 
 		pos := scan.Pos()
 		code, ok := scan.Symbol()
-
+		//fmt.Println(pos, code, token.Lookup(code))
 		if !ok {
 			err = errors.New("invalid UTF-8 encode")
 			return
 		}
 
-		prev := tok
+		prev = tok
 		tok = token.Lookup(code)
+
+		if tok == token.EOF {
+			if nodes == nil {
+				err = rec(pos, tok, code)
+			}
+			return
+		}
 
 		if isTop {
 			isTop = false
@@ -111,11 +185,11 @@ func Fast(src []byte, rec func(scanner.Pos, token.Token, string) error) (nodes [
 			continue
 		case token.COMMENTS:
 			// 完整块注释
-			for !scan.IsEOF() {
+			for {
 				tmp, _ := scan.Symbol()
 				code += tmp
 				tok = token.Lookup(tmp)
-				if tok == token.COMMENTS {
+				if tok == token.COMMENTS || tok == token.EOF {
 					break
 				}
 			}
@@ -131,10 +205,10 @@ func Fast(src []byte, rec func(scanner.Pos, token.Token, string) error) (nodes [
 			tok = token.VALFLOAT
 		case token.PLACEHOLDER:
 			// 识别语义, 只剩下字面值和标识符, 成员
-			if code == "\"" || code == "'" {
+			if code == `"` || code == `'` {
 				// 完整字符串
-				code += scan.EndString(code == "\"")
-				if scan.IsEOF() {
+				code += scan.EndString(code == `"`)
+				if code[0] != code[len(code)-1] {
 					err = errors.New("parser: string is incomplete")
 					return
 				}
@@ -182,7 +256,7 @@ func Fast(src []byte, rec func(scanner.Pos, token.Token, string) error) (nodes [
 				}
 			}
 		}
-		err = rec(pos, tok, code+scan.Tail(false))
+		err = rec(pos, tok, code)
 	}
 	return
 }

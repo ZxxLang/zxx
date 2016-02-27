@@ -1063,7 +1063,7 @@ proc noret {}
 proc y {
 	x() 非法, 因为产生了运算结果是个表达式, 表达式不能独立存在.
 
-	discard x() 用保留字 discard 丢弃结果形成语句.
+	null x() 用保留字 null 丢弃结果形成语句.
 
 	noret() 合法语句, 因为没有产生运算结果.
 

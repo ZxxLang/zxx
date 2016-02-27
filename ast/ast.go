@@ -100,7 +100,7 @@ type (
 		Nodes  []Node
 		Active Node // 活动节点
 		Last   Node // 最后的节点
-		expect rule
+		expect Rule
 	}
 
 	// Decl 可包括声明语句 IsDeclare.
@@ -345,7 +345,7 @@ func (b *File) Push(pos scanner.Pos, tok token.Token, code string) error {
 
 		if b.expect != nil {
 			// expect 尝试生成 Text 节点, 并且 tok 不变
-			if _, pass := b.expect.pass(tok); pass {
+			if _, pass := b.expect.Eat(tok); pass {
 				flag = FText
 				b.expect = nil
 				break
@@ -423,10 +423,10 @@ func (b *Decl) resolve(base *Base) {
 		switch tok {
 		case token.LEFT:
 			flag = FChunk
-			b.all.expect = term{token.IDENT, token.VALSTRING}
+			b.all.expect = Term{token.IDENT, token.VALSTRING}
 		case token.IDENT:
 			flag = FText
-			b.all.expect = term{token.VALSTRING}
+			b.all.expect = Term{token.VALSTRING}
 		case token.VALSTRING:
 			flag = FText | FFinal
 		}
@@ -435,67 +435,67 @@ func (b *Decl) resolve(base *Base) {
 		switch tok {
 		case token.LEFT:
 			flag = FChunk
-			b.all.expect = term{token.IDENT, token.Type}
+			b.all.expect = Term{token.IDENT, token.Type}
 		case token.IDENT, token.Type:
 			flag = FText
-			b.all.expect = term{token.Assign}
+			b.all.expect = Term{token.Assign}
 		}
 
 	case token.VAR:
 		switch tok {
 		case token.LEFT:
 			flag = FChunk
-			b.all.expect = term{token.IDENT, token.MEMBER, token.Type}
+			b.all.expect = Term{token.IDENT, token.MEMBER, token.Type}
 		case token.IDENT, token.Type:
 			flag = FText
-			b.all.expect = term{token.IDENT}
+			b.all.expect = Term{token.IDENT}
 		}
 
 	case token.STATIC:
 		switch tok {
 		case token.LEFT:
 			flag = FChunk
-			b.all.expect = term{token.IDENT, token.MEMBER, token.Type}
+			b.all.expect = Term{token.IDENT, token.MEMBER, token.Type}
 		case token.FUNC, token.PROC:
 			flag = FDeclaration
 		case token.IDENT, token.Type:
 			flag = FText
-			b.all.expect = term{token.IDENT}
+			b.all.expect = Term{token.IDENT}
 		}
 	case token.TYPE:
 		switch tok {
 		case token.LEFT:
 			flag = FChunk
-			b.all.expect = term{token.IDENT}
+			b.all.expect = Term{token.IDENT}
 		case token.IDENT:
 			flag = FText
-			b.all.expect = term{token.LEFT}
+			b.all.expect = Term{token.LEFT}
 		}
 
 	case token.PROC:
 		switch {
 		case tok == token.OUT: // 匿名过程
 			flag = FText
-			b.all.expect = term{token.IDENT, token.MEMBER, token.FUNC}
+			b.all.expect = Term{token.IDENT, token.MEMBER, token.FUNC}
 		case tok == token.IDENT || tok == token.MEMBER || tok.As(token.Type):
 			flag = FText
-			b.all.expect = term{token.IDENT}
+			b.all.expect = Term{token.IDENT}
 		}
 
 	case token.FUNC:
 		switch {
 		case tok == token.OUT: // 匿名过程
 			flag = FText
-			b.all.expect = term{token.IDENT}
+			b.all.expect = Term{token.IDENT}
 		case tok == token.IDENT || tok == token.MEMBER || tok.As(token.Type):
 			flag = FText
-			b.all.expect = term{token.OUT, token.IDENT}
+			b.all.expect = Term{token.OUT, token.IDENT}
 		}
 	case token.PUB:
 		// 暂时不支持分组
 		if tok != token.PUB && tok.As(token.Declare) {
 			flag = FDeclaration
-			b.all.expect = term{token.TYPE, token.PROC, token.FUNC,
+			b.all.expect = Term{token.TYPE, token.PROC, token.FUNC,
 				token.VAR, token.CONST, token.STATIC}
 		}
 	}

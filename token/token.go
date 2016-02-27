@@ -135,33 +135,32 @@ const (
 	LEFT  // [{(
 	RIGHT // ]})
 
+	// 换行具有多义性
+	NL
+
 	// 由解析器分析转义得到
-	IDENT
-	EMPTYLINE
-	INDENTATION
+	SUGAR
 	MEMBER  // IDENT 包含一个 '.'
 	MEMBERS // IDENT 包含多个 '.'
-	SUGAR
+	IDENT
 
-	// 注释
-	COMMENT // '//'
-
-	// 换行
-	NL
+	INDENTATION // 缩进需要特别处理
 
 	// 占位
 	PLACEHOLDER
 
-	// AST 中是没有下列 Token, 他们被转义了
+	// AST 中是没有下列 Token, 他们被解析器转义了
 
 	NAN
 	INFINITE
 	TRUE
 	FALSE
 
-	SPACES   // 连续的空格
-	TABS     // 连续的制表符
-	COMMENTS // '---'
+	COMMENT   // 尾注释 '//'
+	EMPTYLINE // 空白行转为 PLACEHOLDER
+	SPACES    // 连续的空格
+	TABS      // 连续的制表符
+	COMMENTS  // '---'
 )
 
 var tokens = [...]string{
@@ -175,8 +174,19 @@ var tokens = [...]string{
 	SPACES:      "SPACES",
 	TABS:        "TABS",
 
-	COMMENT:  "//",
-	COMMENTS: "---",
+	VALSTRING:   "VALSTRING",
+	VALINTEGER:  "VALINTEGER",
+	VALFLOAT:    "VALFLOAT",
+	VALDATETIME: "VALDATETIME",
+	VALBOOL:     "VALBOOL",
+
+	MEMBER:      "MEMBER",
+	MEMBERS:     "MEMBERS",
+	SUGAR:       "SUGAR",
+	INDENTATION: "INDENTATION",
+
+	COMMENT:  "COMMENT",
+	COMMENTS: "COMMENTS",
 
 	//DOLLAR:  "$",
 	ANTI:    "~",
@@ -307,6 +317,10 @@ func (op Token) Precedence() int {
 	//	return 11
 
 	return 0
+}
+
+func (t Token) Token() Token {
+	return t
 }
 
 var letters map[string]Token // fixed

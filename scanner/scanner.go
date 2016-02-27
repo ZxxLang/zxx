@@ -17,6 +17,12 @@ type scanner struct {
 
 type Pos int
 
+// Offset 返回 pos 位置偏移 offset 个字节的 Pos 值.
+// 注意参数 offset 是有方向
+func (pos Pos) Offset(offset int) Pos {
+	return pos + Pos(offset)
+}
+
 // New 返回一个 scanner 并进行一些前期处理.
 // 如果有 BOM 头则移动当前位置到 BOM 之后, scanner.Pos() 一定为 3.
 func New(source []byte) (scan *scanner) {
@@ -33,6 +39,10 @@ func (s *scanner) Pos() Pos {
 	return Pos(s.offset)
 }
 
+// IsEOF 返回当前扫描位置是否已经到 EOF
+// 不恰当的使用 IsEOF 的话
+// Rune()   得不到  0, 0
+// Symbol() 得不到 "", true
 func (s *scanner) IsEOF() bool {
 	return s.offset >= s.size
 }
@@ -77,10 +87,11 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 	offset := s.offset
 	r, size := s.Rune()
 
-	ok = size > 0
-	if !ok || r == utf8.RuneError {
+	if size == 0 {
+		ok = r == 0
 		return
 	}
+	ok = true
 
 	if s.offset >= s.size {
 		symbol = string(r)
@@ -147,7 +158,7 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 		symbol = string(s.src[offset:s.offset])
 
 	case '"', '\'', '{', '}', '(', ')', '[', ']': // 单个
-		symbol = string(c)
+		symbol = string(s.src[offset:s.offset])
 	default:
 		// 不严格的判断 integer, float, datetime, 标识符
 		var num byte
@@ -160,9 +171,6 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 		for s.offset != s.size {
 
 			switch s.src[s.offset] {
-			default:
-				s.offset++
-				continue
 			case '.':
 				if num == 3 {
 					num = 'f' // float
@@ -193,13 +201,16 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 					s.offset++
 					continue
 				}
-			case
-				' ', '\t', ',',
-				'-', '/', '*',
-				'&', '|', '!', '~', '=',
-				'>', '<',
-				'{', '}', '(', ')', '[', ']',
-				'\r', '\n':
+			default:
+				c = s.src[s.offset]
+				if c < '0' ||
+					c > '9' && c < 'A' ||
+					c > 'Z' && c < 'a' ||
+					c > 'z' {
+					break
+				}
+				s.offset++
+				continue
 			}
 			break
 		}
