@@ -157,7 +157,7 @@ func (s *scanner) Symbol() (symbol string, ok bool) {
 		}
 		symbol = string(s.src[offset:s.offset])
 
-	case '"', '\'', '{', '}', '(', ')', '[', ']': // 单个
+	case ',', '"', '\'', '{', '}', '(', ')', '[', ']': // 单个
 		symbol = string(s.src[offset:s.offset])
 	default:
 		// 不严格的判断 integer, float, datetime, 标识符

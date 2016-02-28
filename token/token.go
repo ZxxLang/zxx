@@ -149,6 +149,9 @@ const (
 	// 占位
 	PLACEHOLDER
 
+	// 表达式是由 AST 产生的
+	EXPR
+
 	// AST 中是没有下列 Token, 他们被解析器转义了
 
 	NAN
@@ -161,6 +164,7 @@ const (
 	SPACES    // 连续的空格
 	TABS      // 连续的制表符
 	COMMENTS  // '---'
+
 )
 
 var tokens = [...]string{
@@ -173,6 +177,7 @@ var tokens = [...]string{
 	RIGHT:       "RIGHT",
 	SPACES:      "SPACES",
 	TABS:        "TABS",
+	EXPR:        "EXPR",
 
 	VALSTRING:   "VALSTRING",
 	VALINTEGER:  "VALINTEGER",
@@ -187,6 +192,15 @@ var tokens = [...]string{
 
 	COMMENT:  "COMMENT",
 	COMMENTS: "COMMENTS",
+
+	Operator:  "Operator",
+	Assign:    "Assign",
+	Declare:   "Declare",
+	Statement: "Statement",
+	Divide:    "Divide",
+	Type:      "Type",
+	Literal:   "Literal",
+	Alone:     "Alone",
 
 	//DOLLAR:  "$",
 	ANTI:    "~",
@@ -333,13 +347,19 @@ func init() {
 		"]": RIGHT,
 		")": RIGHT,
 		"}": RIGHT,
+
+		"nan":      NAN,
+		"infinite": INFINITE,
+		"false":    FALSE,
+		"true":     TRUE,
 	}
 
 	for i := ANTI; i < Alone; i++ {
-		if i == Assign || i == Declare || i == Statement || i == Literal || i == Divide {
+		s := tokens[i]
+		if s == "" || s[0] >= 'A' && s[0] <= 'Z' {
 			continue
 		}
-		letters[tokens[i]] = i
+		letters[s] = i
 	}
 }
 
@@ -399,6 +419,9 @@ func (token Token) As(tok Token) bool {
 func (token Token) Has(tok Token) bool {
 	if tok == token {
 		return true
+	}
+	if tok == EOF {
+		return false
 	}
 	switch token {
 	case Operator:
