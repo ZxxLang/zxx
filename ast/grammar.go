@@ -18,7 +18,8 @@ type Rule interface {
 	// Reset 重置状态标记以便可以开始新的匹配
 	Reset()
 
-	// Set 用来设置规则, 只有 Any 可用
+	// Set 用来设置规则, 只有 Any 规则可用.
+	// 有了该方法可解决递归规则.
 	Set(...Rule)
 }
 
@@ -110,7 +111,7 @@ type alternative struct {
 	next  *alternative // 递归生成新的规则
 }
 
-// Any 产生任一匹配 Rule
+// Any 产生任一匹配 Rule. 这是唯一支持递归的规则.
 func Any(rule ...Rule) Rule {
 	return &alternative{Rules: rule, pos: 0}
 }
@@ -127,16 +128,16 @@ func Seq(rule ...Rule) Rule {
 	return &concatenation{Rules: rule, pos: 0}
 }
 
-func (q *alternative) Eat(tok token.Token) (int, bool) {
+func (q *alternative) Eat(tok token.Token) (n int, ok bool) {
 	if q.reset {
 		if q.next == nil {
 			q.next = &alternative{q.Rules, 0, false, nil}
 		}
-		n, ok := q.next.Eat(tok)
-		if ok {
-			q.next = nil
+		n, ok = q.next.Eat(tok)
+		if !ok && n == 0 {
+			q.next.Reset()
 		}
-		return n, ok
+		return
 	}
 	q.reset = true
 	if q.pos == len(q.Rules) {
@@ -144,21 +145,18 @@ func (q *alternative) Eat(tok token.Token) (int, bool) {
 	}
 	for ; q.pos < len(q.Rules); q.pos++ {
 
-		n, ok := q.Rules[q.pos].Eat(tok)
+		n, ok = q.Rules[q.pos].Eat(tok)
 
 		if n == 1 {
 			if ok {
 				q.pos = len(q.Rules)
 			}
-			q.reset = false
-			return n, ok
+			break
 		}
 		q.Rules[q.pos].Reset()
 	}
-
-	q.pos = 0
 	q.reset = false
-	return 0, false
+	return
 }
 
 func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
@@ -236,13 +234,13 @@ func (q *concatenation) Reset() {
 	q.reset = false
 }
 
-func (r Term) Set(...Rule)   {}
-func (r option) Set(...Rule) {}
-func (r *more) Set(...Rule)  {}
+func (r Term) Set(...Rule)   { panic("not support") }
+func (r option) Set(...Rule) { panic("not support") }
+func (r *more) Set(...Rule)  { panic("not support") }
 func (q *alternative) Set(r ...Rule) {
 	q.Rules = r
 }
 
-func (q *concatenation) Set(r ...Rule) {
-	// q.Rules = r
+func (q *concatenation) Set(...Rule) {
+	panic("not support")
 }
