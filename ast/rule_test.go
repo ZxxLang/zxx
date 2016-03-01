@@ -22,28 +22,35 @@ func init() {
 
 	a_type := Term{token.IDENT, token.Type}
 
-	expr := Seq()
-	expr0 := More(Term{token.COMMA, token.Operator}, Any(
-		Term{token.Literal, token.IDENT},
-		expr,
-	))
-	expr = (Any(
-		Option(Seq(
+	expr := Any()
+	expr0 := More(Term{token.COMMA, token.Operator}, expr)
+	expr.Set(
+		Seq(
 			Term{token.Literal, token.IDENT},
 			Option(Any(
 				Seq(
 					Term{token.Operator},
 					expr0,
 				),
-				Seq(Term{token.LEFT}, expr0, Term{token.RIGHT}),
+				Seq(Term{token.LEFT},
+					Any(
+						Term{token.RIGHT},
+						Seq(expr0, Term{token.RIGHT}),
+					),
+				),
 			)),
-		)),
+		),
 		Seq(
 			Term{token.NOT, token.ANTI},
 			expr0,
 		),
-		Seq(Term{token.LEFT}, expr0, Term{token.RIGHT}),
-	))
+		Seq(Term{token.LEFT},
+			Any(
+				Term{token.RIGHT},
+				Seq(expr0, Term{token.RIGHT}),
+			),
+		),
+	)
 
 	s_assign := Seq(
 		Term{token.ASSIGN, token.COLON},
@@ -123,32 +130,33 @@ var good, bad []ns
 func init() {
 
 	good = []ns{
-		nsr(8, `use (a, b = "")`, r_),
-		nsr(10, `use (a, b = [true])`),
-		nsr(10, `use (a, b = [11])`),
-		nsr(12, `use (a, b = [true,true])`),
-		nsr(12, `use (a, b = [true,"1"])`),
-		nsr(13, `use (a, b = not [true,"1"])`),
-		// nsr(2, `use 'b'`, r_decl_use),
-		// nsr(3, `use a 'b'`),
-		// nsr(4, `use ('b')`),
-		// nsr(5, `use ( 'b',)`),
-		// nsr(6, `use ('b','d')`, r_decl_use),
-		// nsr(5, `use (a 'b')`),
-		// nsr(8, `use (a 'b', c 'd')`),
-		// nsr(9, `use (a 'b', c 'd',)`),
-		// nsr(7, "use (\na 'b'\n)"),
-		// nsr(8, "use (\n\ta 'b',\n\t)"),
-		// nsr(7, `use ( 'b', c 'd')`),
-		// nsr(8, "use ( 'b',\nc 'd')"),
-		// nsr(8, "use ( 'b',\n\tc 'd')"),
-		// nsr(11, "use (世界\n\n你好\na 'b',\n\n\tc 'd/e'\n\n\t)"),
+		nsr(2, `use 'b'`, r_decl_use),
+		nsr(3, `use a 'b'`),
+		nsr(4, `use ('b')`),
+		nsr(5, `use ( 'b',)`),
+		nsr(6, `use ('b','d')`, r_decl_use),
+		nsr(5, `use (a 'b')`),
+		nsr(8, `use (a 'b', c 'd')`),
+		nsr(9, `use (a 'b', c 'd',)`),
+		nsr(7, "use (\na 'b'\n)"),
+		nsr(8, "use (\n\ta 'b',\n\t)"),
+		nsr(7, `use ( 'b', c 'd')`),
+		nsr(8, "use ( 'b',\nc 'd')"),
+		nsr(8, "use ( 'b',\n\tc 'd')"),
+		nsr(11, "use (世界\n\n你好\na 'b',\n\n\tc 'd/e'\n\n\t)"),
 
-		// nsr(8, "use ( 'b'\n, c 'd')"),
+		nsr(8, "use ( 'b'\n, c 'd')"),
 
-		// nsr(4, `type a{}`, r_decl_type),
-		// nsr(6, `type a{int b}`),
-		// nsr(8, `type a{int b,c}`),
+		nsr(4, `type a{}`, r_decl_type),
+		nsr(6, `type a{int b}`),
+		nsr(8, `type a{i b,c}`),
+
+		nsr(8, `type a{int b =1}`),
+		nsr(9, `type a{int b =[]}`),
+		nsr(10, `type a{int b =[1]}`),
+		// nsr(12, `type a{int b =[1,true]}`),
+		// nsr(13, `type a{c b = not [true,"1"]}`),
+		// nsr(11, `type a{int b =[[]]}`),
 	}
 
 	bad = []ns{
@@ -181,7 +189,6 @@ func Test_good(t *testing.T) {
 }
 
 func Test_bad(t *testing.T) {
-	return
 	var r Rule
 	for i, ns := range bad {
 		if ns.r != nil {

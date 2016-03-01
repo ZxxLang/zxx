@@ -18,8 +18,8 @@ type Rule interface {
 	// Reset 重置状态标记以便可以开始新的匹配
 	Reset()
 
-	// Set 用来设置规则, 只有 Any, Seq 可用
-	Set(Rule)
+	// Set 用来设置规则, 只有 Any 可用
+	Set(...Rule)
 }
 
 // Term 规则任一 token.Token 匹配
@@ -107,6 +107,7 @@ type alternative struct {
 	Rules []Rule
 	pos   int
 	reset bool
+	next  *alternative // 递归生成新的规则
 }
 
 // Any 产生任一匹配 Rule
@@ -127,6 +128,17 @@ func Seq(rule ...Rule) Rule {
 }
 
 func (q *alternative) Eat(tok token.Token) (int, bool) {
+	if q.reset {
+		if q.next == nil {
+			q.next = &alternative{q.Rules, 0, false, nil}
+		}
+		n, ok := q.next.Eat(tok)
+		if ok {
+			q.next = nil
+		}
+		return n, ok
+	}
+	q.reset = true
 	if q.pos == len(q.Rules) {
 		q.pos = 0
 	}
@@ -138,17 +150,20 @@ func (q *alternative) Eat(tok token.Token) (int, bool) {
 			if ok {
 				q.pos = len(q.Rules)
 			}
+			q.reset = false
 			return n, ok
 		}
 		q.Rules[q.pos].Reset()
 	}
 
 	q.pos = 0
+	q.reset = false
 	return 0, false
 }
 
 func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
 	if q.pos == len(q.Rules) {
+		q.Reset()
 		q.pos = 0
 	}
 
@@ -186,7 +201,6 @@ func (r option) Reset() {
 }
 
 func (r *more) Reset() {
-	return
 	if r.reset {
 		return
 	}
@@ -197,7 +211,6 @@ func (r *more) Reset() {
 }
 
 func (q *alternative) Reset() {
-	return
 	if q.reset {
 		return
 	}
@@ -211,7 +224,6 @@ func (q *alternative) Reset() {
 }
 
 func (q *concatenation) Reset() {
-	return
 	if q.reset {
 		return
 	}
@@ -224,13 +236,13 @@ func (q *concatenation) Reset() {
 	q.reset = false
 }
 
-func (r Term) Set(Rule)   {}
-func (r option) Set(Rule) {}
-func (r *more) Set(Rule)  {}
-func (q *alternative) Set(r Rule) {
-	q.Rules = []Rule{r}
+func (r Term) Set(...Rule)   {}
+func (r option) Set(...Rule) {}
+func (r *more) Set(...Rule)  {}
+func (q *alternative) Set(r ...Rule) {
+	q.Rules = r
 }
 
-func (q *concatenation) Set(r Rule) {
-	q.Rules = []Rule{r}
+func (q *concatenation) Set(r ...Rule) {
+	// q.Rules = r
 }
