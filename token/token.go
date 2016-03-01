@@ -204,6 +204,7 @@ var tokens = [...]string{
 
 	//DOLLAR:  "$",
 	ANTI:    "~",
+	NOT:     "not",
 	BITAND:  "&",
 	BITOR:   "|",
 	XOR:     "xor",
@@ -230,7 +231,6 @@ var tokens = [...]string{
 	IS:      "is",
 	ISNOT:   "isnot",
 	HAS:     "has",
-	NOT:     "not",
 	AND:     "and",
 	OR:      "or",
 
@@ -347,6 +347,8 @@ func init() {
 		"]": RIGHT,
 		")": RIGHT,
 		"}": RIGHT,
+
+		"!": NOT,
 
 		"nan":      NAN,
 		"infinite": INFINITE,

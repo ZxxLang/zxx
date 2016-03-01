@@ -1,10 +1,6 @@
 package ast
 
-import (
-	"fmt"
-
-	"github.com/ZxxLang/zxx/token"
-)
+import "github.com/ZxxLang/zxx/token"
 
 // 词法轻规则, 配合些许 Resolve 代码完成构建
 // 所有的规则必须能吃掉一个 Token 才能继续
@@ -21,6 +17,9 @@ type Rule interface {
 
 	// Reset 重置状态标记以便可以开始新的匹配
 	Reset()
+
+	// Set 用来设置规则, 只有 Any, Seq 可用
+	Set(Rule)
 }
 
 // Term 规则任一 token.Token 匹配
@@ -38,11 +37,12 @@ func (r Term) Eat(tok token.Token) (int, bool) {
 // option 重复 {0,1}
 type option struct {
 	Rule
+	reset bool
 }
 
 // Option  产生重复匹配 r{0,1}
 func Option(r Rule) Rule {
-	return option{r}
+	return option{Rule: r}
 }
 
 func (r option) Eat(tok token.Token) (int, bool) {
@@ -63,22 +63,23 @@ func (r option) Eat(tok token.Token) (int, bool) {
 // more 的实现方法可能会改变, 不导出
 type more struct {
 	Rule
-	sep token.Token
-	n   int // 成功的次数
+	sep   Term
+	n     int // 成功的次数
+	reset bool
 }
 
 // More  产生重复匹配 r{1,} Rule
 // sep 是多次重复匹配的分隔 token.Token.
-func More(sep token.Token, r Rule) Rule {
-	return &more{r, sep, 0}
+func More(sep Term, r Rule) Rule {
+	return &more{Rule: r, sep: sep, n: 0}
 }
 
 func (r *more) Eat(tok token.Token) (n int, ok bool) {
 
 	n, ok = r.Rule.Eat(tok)
 
-	if n == 0 && (ok || r.n == 1) && r.sep != token.EOF {
-		if r.sep.Has(tok) {
+	if n == 0 && (ok || r.n == 1) && r.sep != nil {
+		if x, y := r.sep.Eat(tok); y && x == 1 {
 			n = 1
 			r.n = 2
 			ok = false
@@ -101,30 +102,31 @@ func (r *more) Eat(tok token.Token) (n int, ok bool) {
 	return
 }
 
-// Alternative 规则, 最多吃掉一个 Token
-type Alternative struct {
+// alternative 规则, 最多吃掉一个 Token
+type alternative struct {
 	Rules []Rule
 	pos   int
+	reset bool
 }
 
 // Any 产生任一匹配 Rule
 func Any(rule ...Rule) Rule {
-	return &Alternative{rule, 0}
+	return &alternative{Rules: rule, pos: 0}
 }
 
-// Concatenation
-type Concatenation struct {
+// concatenation
+type concatenation struct {
 	Rules []Rule
 	pos   int
-	zero  int
+	reset bool
 }
 
 // Seq 产生序列匹配 Rule
-func Seq(rule ...Rule) *Concatenation {
-	return &Concatenation{rule, 0, 0}
+func Seq(rule ...Rule) Rule {
+	return &concatenation{Rules: rule, pos: 0}
 }
 
-func (q *Alternative) Eat(tok token.Token) (int, bool) {
+func (q *alternative) Eat(tok token.Token) (int, bool) {
 	if q.pos == len(q.Rules) {
 		q.pos = 0
 	}
@@ -145,16 +147,14 @@ func (q *Alternative) Eat(tok token.Token) (int, bool) {
 	return 0, false
 }
 
-func (q *Concatenation) Eat(tok token.Token) (n int, ok bool) {
+func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
 	if q.pos == len(q.Rules) {
 		q.pos = 0
 	}
 
 	for ; q.pos < len(q.Rules); q.pos++ {
 		n, ok = q.Rules[q.pos].Eat(tok)
-		if q.zero == 1 {
-			fmt.Println(n, ok, tok, q.pos)
-		}
+
 		if !ok {
 			if n == 0 {
 				q.pos = 0
@@ -174,19 +174,63 @@ func (q *Concatenation) Eat(tok token.Token) (n int, ok bool) {
 	return
 }
 
-func (r Term) Reset()  {}
-func (r *more) Reset() { r.n = 0 }
+func (r Term) Reset() {}
 
-func (q *Alternative) Reset() {
-	for _, r := range q.Rules {
-		r.Reset()
+func (r option) Reset() {
+	if r.reset {
+		return
 	}
-	q.pos = 0
+	r.reset = true
+	r.Rule.Reset()
+	r.reset = false
 }
 
-func (q *Concatenation) Reset() {
+func (r *more) Reset() {
+	return
+	if r.reset {
+		return
+	}
+	r.reset = true
+	r = More(r.sep, r.Rule).(*more)
+	r.Rule.Reset()
+	r.reset = false
+}
+
+func (q *alternative) Reset() {
+	return
+	if q.reset {
+		return
+	}
+	q.reset = true
+
+	q = Any(q.Rules...).(*alternative)
 	for _, r := range q.Rules {
 		r.Reset()
 	}
-	q.pos = q.zero
+	q.reset = false
+}
+
+func (q *concatenation) Reset() {
+	return
+	if q.reset {
+		return
+	}
+	q.reset = true
+
+	q = Seq(q.Rules...).(*concatenation)
+	for _, r := range q.Rules {
+		r.Reset()
+	}
+	q.reset = false
+}
+
+func (r Term) Set(Rule)   {}
+func (r option) Set(Rule) {}
+func (r *more) Set(Rule)  {}
+func (q *alternative) Set(r Rule) {
+	q.Rules = []Rule{r}
+}
+
+func (q *concatenation) Set(r Rule) {
+	q.Rules = []Rule{r}
 }

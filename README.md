@@ -115,7 +115,7 @@ Z 依靠目录名和文件名组织源代码:
 rep
 ├── hello/
 ├── hello-word/
-├── block.json
+├── use.json
 ├── hello-word.md
 ├── rep.md
 ├── some.md
@@ -128,18 +128,15 @@ rep
 
 文件 'rep-hello.zxx' 归属包 'rep/rep', 因为它包含了新的包名称.
 
-##block.json
+##use.json
 
-上例中的文件 'block.json' 用来描述该目录下的源码情况.
-文件名使用 'block' 而不是 'package' 是因为 Z 中没有 package 概念, 只有块 -- block.
+因 'use' 是保留字不能作为包名, 所以用 'use.json' 描述所在目录包细节是无污染的.
 
-Z 没有把 block 做保留字, block 就在代码中, 通常被 '{}' 或者 '[]' 包裹着.
+同理 'main.json' 用来描述 main 包细节.
 
-显然使用仓库, 项目, 包这些词汇进行描述更友好.
+	目录的层级关系只是存储的组织形式, 包都是平级的, 没有层级归属.
 
-	目录的层级关系只是存储的组织形式, package 或者 block 都是平级的, 没有层级归属.
-
-'block.json' 采用语义化属性名, 通常这无需特别解释, 看到名称就知道作用.
+'use.json' 采用语义化属性名, 通常这无需特别解释, 看到名称就知道作用.
 
 
 ```JSON
@@ -293,14 +290,13 @@ if a and, x or (b or c) and (d or e) [
 | 运算符                   | 解释			    |
 |--------------------------|--------------------|
 | $                        |模板取值专用		|
-| ~                        |一元右结合位反		|
+| not,!,~                  |一元右结合非,位反	|
 | &,\|,xor                 |位与,或,异或		|
 | mul,*,/,mod,%,<<,>>      |乘除,整数取模,位移	|
 | add,+,-                  |数值加减,字符串连接	|
 | to                       |数值至数值			|
 | ==,!=,<=,>=,>,<          |比较运算			|
 | is,isnot,has             |结果是布尔类型		|
-| not,!                    |一元右结合非		|
 | and                      |与					|
 | or                       |或					|
 
@@ -345,21 +341,19 @@ a mod b 等价于 a - (a/b)*b
 取模运算符 '%' 运算 a % b 时先对取绝对值, 等价 |a| mod |b|.
 
 运算符语法糖可进一步消除分组括号, 对于分组运算例子
-if a and (x or ((b or c) and (d or e))) [
+if a and (x or b or c) and (d or e) [
 ]
 
-使用运算符语法糖可该写为
+使用运算符语法糖
 if a and x.or b.or c and d.or e [
-	二元 or 运算变成一元右结合运算
-	这也意味着保留字 or 不能用作成员名称
+	语法糖让二元运算变成一元右结合运算, 用伪函数推导一下:
+	a and x.or(b.or(c)) and d.or(e)
+	a and (x or b.or(c)) and (d or e)
+	a and (x or b or c) and (d or e)
 ]
 
-运算符语法糖混合逗号分组视觉上更清晰
-if a and, x or b.or c and d.or e [
-]
-
-同理使用加减法运算语法糖
-var int x = i.add -1 mul 5 等同 (i-1)*5
+同理
+var int x = i.add 1 mul 5 等同 (i+1)*5
 ```
 
 二元运算符 'is', 'isnot' 有多种情况.
@@ -854,24 +848,29 @@ Z 源代码总是由下列声明开始的.
 	如果行首用到这些词, 大写首字母或者随便加个非空白符号就行.
 
 
-##引用包
+##使用声明
 
-保留字 use 可引用外部包.
+保留字 use 用来声明使用外部包或者声明编译参数.
 
 ```
-引用单包
+使用单包
 use "os"
-use path "path"				命名引用
+use path "path"				命名
 
-引用多包分组写法
+使用多包分组写法
 use (
 	"io"
-	path "path/filepath"	命名引用
+	path "path/filepath"	命名
 )
 
 紧凑写法
 use ("os", path "path")
 
+声明编译参数
+
+use "-pub"			表示该文件中所有顶层变量,静态,常量,类型,函数都是 'pub' 的.
+
+use "-pubmethod"	表示该文件中所有顶层类型的方法都是 'pub' 的.
 ```
 
 
