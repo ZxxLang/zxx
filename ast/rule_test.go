@@ -17,34 +17,18 @@ var (
 
 func init() {
 
-	o_nl := Option(Term{token.NL})
-	a_ident := Term{token.IDENT}
-
-	a_type := Term{token.IDENT, token.Type}
-
-	expr := Any()
-	expr0 := More(Term{token.COMMA, token.Operator}, expr)
-	expr.Set(
-		Seq(
-			Term{token.Literal, token.IDENT},
-			Option(Any(
-				Seq(
-					Term{token.Operator},
-					expr0,
-				),
-				Seq(Term{token.LEFT},
-					Any(
-						Term{token.RIGHT},
-						Seq(expr0, Term{token.RIGHT}),
-					),
-				),
-			)),
-		),
+	expr0 := More(Term{token.COMMA, token.Operator}, nil)
+	expr := Any(
 		Seq(
 			Term{token.NOT, token.ANTI},
 			expr0,
 		),
-		Seq(Term{token.LEFT},
+		Seq(
+			Term{token.Literal, token.IDENT},
+			Option(expr0),
+		),
+		Seq(
+			Term{token.LEFT},
 			Any(
 				Term{token.RIGHT},
 				Seq(expr0, Term{token.RIGHT}),
@@ -52,63 +36,68 @@ func init() {
 		),
 	)
 
-	s_assign := Seq(
-		Term{token.ASSIGN, token.COLON},
-		expr,
-	)
+	expr0.Set(expr)
 
 	r_decl_use = Seq(
 		Term{token.USE},
 		Any(
+			Term{token.VALSTRING},
+			Seq(Term{token.IDENT}, Term{token.VALSTRING}),
 			Seq(
-				Term{token.LEFT},
-				More(Term{token.COMMA}, Seq(
-					o_nl,
-					Option(Term{token.IDENT}),
-					Term{token.VALSTRING},
-					o_nl,
-				)),
+				Term{token.LEFT}, Option(Term{token.NL}),
+				More(Term{token.COMMA, token.NL},
+					Seq(
+						Option(Term{token.NL}),
+						Any(
+							Term{token.VALSTRING},
+							Seq(Term{token.IDENT}, Term{token.VALSTRING}),
+						),
+					),
+				),
+				Option(Term{token.NL}),
 				Term{token.RIGHT},
 			),
-			Seq(Option(a_ident), Term{token.VALSTRING}),
 		),
 	)
+
+	style_type_body := More(Term{token.SEMICOLON, token.NL}, Seq(
+		Option(Term{token.PUB}), Option(Term{token.STATIC}),
+		Term{token.Type, token.IDENT},
+		More(
+			Term{token.COMMA},
+			Seq(
+				Term{token.IDENT},
+				Option(Seq(
+					Term{token.ASSIGN, token.COLON},
+					expr,
+				)),
+			),
+		),
+	))
 
 	r_decl_type = Seq(
 		Term{token.TYPE}, Term{token.IDENT},
 		Any(
-			Term{token.IDENT},
+			Term{token.IDENT, token.Type}, // 别名
 			Seq(
 				Term{token.LEFT},
-				Any(
-					Term{token.RIGHT},
-					Seq(
-						More(Term{token.COMMA}, Seq(
-							o_nl,
-							a_type, More(
-								Term{token.COMMA},
-								Seq(
-									Term{token.IDENT},
-									Option(s_assign),
-								),
-							),
-						)),
-						Term{token.RIGHT},
-					),
-				),
+				Option(style_type_body),
+				Term{token.RIGHT},
 			),
 		),
 	)
 
 	// r_ 临时测试用
 	r_ = Seq(
-		Term{token.USE},
-		Term{token.LEFT},
-		More(Term{token.COMMA}, Seq(
-			Term{token.IDENT},
-			Option(s_assign),
-		)),
-		Term{token.RIGHT},
+		Term{token.TYPE}, Term{token.IDENT},
+		Any(
+			Term{token.IDENT, token.Type}, // 别名
+			Seq(
+				Term{token.LEFT},
+				Option(style_type_body),
+				Term{token.RIGHT},
+			),
+		),
 	)
 }
 
@@ -130,11 +119,11 @@ var good, bad []ns
 func init() {
 
 	good = []ns{
+		nsr(8, `type a{int b =1}`, r_),
 		nsr(2, `use 'b'`, r_decl_use),
 		nsr(3, `use a 'b'`),
 		nsr(4, `use ('b')`),
 		nsr(5, `use ( 'b',)`),
-		nsr(6, `use ('b','d')`, r_decl_use),
 		nsr(5, `use (a 'b')`),
 		nsr(8, `use (a 'b', c 'd')`),
 		nsr(9, `use (a 'b', c 'd',)`),
@@ -145,18 +134,25 @@ func init() {
 		nsr(8, "use ( 'b',\n\tc 'd')"),
 		nsr(11, "use (世界\n\n你好\na 'b',\n\n\tc 'd/e'\n\n\t)"),
 
-		nsr(8, "use ( 'b'\n, c 'd')"),
-
-		nsr(4, `type a{}`, r_decl_type),
+		nsr(3, `type a int`, r_decl_type),
+		nsr(4, `type a{}`),
 		nsr(6, `type a{int b}`),
+		nsr(6, `type a{i8 b}`),
 		nsr(8, `type a{i b,c}`),
 
+		nsr(9, "type a{int b\nint c}"),
+		nsr(9, "type a{int b;int c}"),
 		nsr(8, `type a{int b =1}`),
+		nsr(10, `type a{int b,c=1}`),
+		nsr(8, `type a{int b =true}`),
 		nsr(9, `type a{int b =[]}`),
 		nsr(10, `type a{int b =[1]}`),
-		// nsr(12, `type a{int b =[1,true]}`),
-		// nsr(13, `type a{c b = not [true,"1"]}`),
-		// nsr(11, `type a{int b =[[]]}`),
+		nsr(12, `type a{int b =[1,true]}`),
+		nsr(13, `type a{c b = not [true,"1"]}`),
+		nsr(11, `type a{int b =[[]]}`),
+		nsr(10, "type a{pub int b;int c}"),
+		nsr(11, "type a{pub int b;static int c}"),
+		nsr(11, "type a{int b;pub static int c}"),
 	}
 
 	bad = []ns{
@@ -164,12 +160,14 @@ func init() {
 		nsr(2, `use a`),
 		nsr(3, `use 'd')`),
 		nsr(3, `use ('d'`),
-		nsr(2, `use (a,'d')`),
+		nsr(6, `use (a,'d')`),
 		nsr(5, `use a 'b' c 'd'`),
 		nsr(6, `use a 'b', c 'd'`),
 		nsr(6, `use ('b' c 'd')`),
 		nsr(6, `use (a 'b' 'd')`),
 		nsr(7, `use (a 'b' c 'd')`),
+		// 未来可能会支持下列
+		nsr(8, "use ( 'b'\n, c 'd')"),
 	}
 }
 
@@ -189,6 +187,7 @@ func Test_good(t *testing.T) {
 }
 
 func Test_bad(t *testing.T) {
+
 	var r Rule
 	for i, ns := range bad {
 		if ns.r != nil {
@@ -215,8 +214,9 @@ func testParse(src string, r Rule) (n int, tok token.Token) {
 			}
 			//fmt.Println(n, t)
 			if t == token.EOF {
-				if !ok { // 让 Option, More 结束
-					eat, ok = r.Eat(t)
+				if !ok {
+					// 让 More 结束
+					_, ok = r.Eat(t)
 				}
 				if ok {
 					tok = token.EOF
