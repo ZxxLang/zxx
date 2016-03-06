@@ -18,11 +18,14 @@ type Rule interface {
 	// processing 重置状态标记以便可以开始新的匹配
 	Reset()
 
-	// Set 用来设置规则, 只有 Any 规则可用.
+	// Set 用来设置规则, 只有 More, Seq 规则可用.
 	// 有了该方法可解决递归规则.
 	Set(Rule)
 
 	Clone() Rule
+
+	Name() string
+	SetName(string) Rule
 }
 
 // Term 规则任一 token.Token 匹配
@@ -44,6 +47,8 @@ func (r Term) Clone() Rule {
 // option 重复 {0,1}
 type option struct {
 	Rule
+	n          int
+	name       string
 	processing bool
 	next       *option
 }
@@ -54,7 +59,7 @@ func Option(r Rule) Rule {
 }
 
 func (r *option) Clone() Rule {
-	return &option{Rule: r.Rule.Clone()}
+	return &option{Rule: r.Rule.Clone(), name: r.name}
 }
 
 func (r *option) Eat(tok token.Token) (n int, ok bool) {
@@ -73,8 +78,10 @@ func (r *option) Eat(tok token.Token) (n int, ok bool) {
 
 	n, ok = r.Rule.Eat(tok)
 
+	r.n += n
 	if n == 0 {
-		ok = true
+		ok = ok || r.n == 0
+		r.n = 0
 		r.Rule.Reset()
 	}
 
@@ -88,6 +95,7 @@ type more struct {
 	sep        Term
 	next       *more
 	n          int
+	name       string
 	more       bool // 期望逗号
 	processing bool
 }
@@ -99,8 +107,39 @@ func More(sep Term, r Rule) Rule {
 	return &more{Rule: r, sep: sep}
 }
 
+type onceSep struct {
+	name string
+	rule Rule
+	once Rule
+	did  bool
+}
+
+// Once 产生当 rule 吃不掉 Token 时尝试一次 once 的规则.
+// 如果 once 成功, 返回 1, false, 会继续使用 rule.
+// 无论成功失败 once 只执行一次.
+func Once(once, rule Rule) Rule {
+	return &onceSep{"", rule, once, false}
+}
+
+func (r *onceSep) Clone() Rule {
+	return &onceSep{r.name, r.rule.Clone(), r.once.Clone(), false}
+}
+
+func (r *onceSep) Eat(tok token.Token) (n int, ok bool) {
+	// 效率稍低
+	n, ok = r.rule.Eat(tok)
+	if n == 0 && !r.did {
+		r.did = true
+		n, _ = r.once.Eat(tok)
+		if n == 1 {
+			ok = false
+		}
+	}
+	return
+}
+
 func (r *more) Clone() Rule {
-	return &more{Rule: r.Rule.Clone(), sep: r.sep}
+	return &more{Rule: r.Rule.Clone(), sep: r.sep, name: r.name}
 }
 
 func (r *more) Eat(tok token.Token) (n int, ok bool) {
@@ -116,31 +155,44 @@ func (r *more) Eat(tok token.Token) (n int, ok bool) {
 	}
 
 	r.processing = true
-	// n, m := r.n, r.more
+
 	if r.more {
 		r.more = false
 		n, _ = r.sep.Eat(tok)
-		ok = n == 0
 		if n == 0 {
 			r.n = 0 // end
+			ok = true
 		}
 	} else {
 		n, ok = r.Rule.Eat(tok)
+
 		if ok {
 			r.n = 1
 		}
-		r.more = ok && n == 1 // 下次尝试 sep
+		r.more = r.sep != nil && ok && n == 1 // 下次尝试 sep
 		if n == 0 {
-			if ok && r.n != 0 { // 立即尝试 sep
+
+			if r.n != 0 { // 立即尝试 sep
 				r.more = false
-				n, _ = r.sep.Eat(tok)
-				ok = n == 0
+
+				if r.sep != nil {
+					n, _ = r.sep.Eat(tok)
+					ok = n == 0
+					r.Rule.Reset()
+				} else if ok && tok != token.EOF {
+					// 再次尝试
+					n, ok = r.Rule.Eat(tok)
+				} else {
+					ok = true // end
+				}
+
 				if n == 0 {
 					r.n = 0 // end
 				}
-			} else if r.n != 0 {
+
+			} else {
+				ok = r.sep == nil && tok == token.EOF
 				r.n = 0 // end
-				ok = true
 				r.more = false
 			}
 
@@ -155,6 +207,7 @@ func (r *more) Eat(tok token.Token) (n int, ok bool) {
 
 // alternative 规则, 最多吃掉一个 Token
 type alternative struct {
+	name       string
 	Rules      []Rule
 	pos        int
 	next       *alternative
@@ -178,6 +231,7 @@ func (r *alternative) clone() *alternative {
 	}
 	r.cloning = true
 	nr := &alternative{}
+	nr.name = r.name
 	nr.Rules = make([]Rule, len(r.Rules))
 	for i := 0; i < len(nr.Rules); i++ {
 		nr.Rules[i] = r.Rules[i].Clone()
@@ -188,6 +242,7 @@ func (r *alternative) clone() *alternative {
 
 // concatenation
 type concatenation struct {
+	name       string
 	Rules      []Rule
 	pos        int
 	next       *concatenation
@@ -210,6 +265,7 @@ func (r *concatenation) clone() *concatenation {
 	}
 	r.cloning = true
 	nr := &concatenation{}
+	nr.name = r.name
 	nr.Rules = make([]Rule, len(r.Rules))
 	for i := 0; i < len(nr.Rules); i++ {
 		nr.Rules[i] = r.Rules[i].Clone()
@@ -238,7 +294,9 @@ func (q *alternative) Eat(tok token.Token) (n int, ok bool) {
 	if q.must != nil {
 		n, ok = q.must.Eat(tok)
 		if ok || n == 0 {
+			q.must.Reset()
 			q.must = nil
+			q.pos = len(q.Rules)
 		}
 		q.processing = false
 		return
@@ -256,20 +314,24 @@ func (q *alternative) Eat(tok token.Token) (n int, ok bool) {
 				q.pos = len(q.Rules)
 			} else {
 				q.must = q.Rules[q.pos]
-				q.pos = 0
 			}
 			break
 		}
+
 		if !ok {
 			q.Rules[q.pos].Reset()
+			continue
 		}
-		ok = false
+
+		q.pos = len(q.Rules)
+		break
 	}
 	q.processing = false
 	return
 }
 
 func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
+
 	if q.processing {
 		if q.next == nil {
 			q.next = q.clone()
@@ -282,9 +344,12 @@ func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
 		return
 	}
 
+	// 上次成功过, 这次如果吃不掉, 那么返回 0,true
+	prev := false
 	q.processing = true
 	if q.pos == len(q.Rules) {
 		q.pos = 0
+		prev = true
 	}
 
 	for ; q.pos < len(q.Rules); q.pos++ {
@@ -304,9 +369,14 @@ func (q *concatenation) Eat(tok token.Token) (n int, ok bool) {
 		}
 		break
 	}
-	q.processing = false
+
+	// 保持上次的成功状态
+	if prev && !ok && n == 0 {
+		q.pos = len(q.Rules)
+	}
 	ok = q.pos == len(q.Rules)
 
+	q.processing = false
 	return
 }
 
@@ -315,6 +385,8 @@ func (r Term) Reset() {}
 func (r *option) Reset() {
 	if !r.processing {
 		r.processing = true
+		r.n = 0
+		r.next = nil
 		r.Rule.Reset()
 		r.processing = false
 	}
@@ -325,9 +397,16 @@ func (r *more) Reset() {
 		r.processing = true
 		r.n = 0
 		r.more = false
+		r.next = nil
 		r.Rule.Reset()
 		r.processing = false
 	}
+}
+
+func (r *onceSep) Reset() {
+	r.did = false
+	r.rule.Reset()
+	r.once.Reset()
 }
 
 func (q *alternative) Reset() {
@@ -338,6 +417,7 @@ func (q *alternative) Reset() {
 		}
 		q.pos = 0
 		q.must = nil
+		q.next = nil
 		q.processing = false
 	}
 }
@@ -349,8 +429,13 @@ func (q *concatenation) Reset() {
 			r.Reset()
 		}
 		q.pos = 0
+		q.next = nil
 		q.processing = false
 	}
+}
+
+func (r *onceSep) Set(rule Rule) {
+	panic("not support")
 }
 
 func (r *more) Set(rule Rule) {
@@ -366,6 +451,46 @@ func (q *alternative) Set(Rule) {
 	panic("not support")
 }
 
-func (q *concatenation) Set(Rule) {
-	panic("not support")
+func (q *concatenation) Set(rule Rule) {
+	c, ok := rule.(*concatenation)
+	if !ok || q.processing {
+		panic("not support")
+	}
+	q.Rules = make([]Rule, len(c.Rules))
+	for i := 0; i < len(q.Rules); i++ {
+		q.Rules[i] = c.Rules[i]
+	}
+}
+
+func (r Term) Name() string        { return "" }
+func (r Term) SetName(string) Rule { return r }
+
+func (r *option) Name() string { return r.name }
+func (r *option) SetName(name string) Rule {
+	r.name = name
+	return r
+}
+
+func (r *more) Name() string { return r.name }
+func (r *more) SetName(name string) Rule {
+	r.name = name
+	return r
+}
+
+func (r *onceSep) Name() string { return r.name }
+func (r *onceSep) SetName(name string) Rule {
+	r.name = name
+	return r
+}
+
+func (r *alternative) Name() string { return r.name }
+func (r *alternative) SetName(name string) Rule {
+	r.name = name
+	return r
+}
+
+func (r *concatenation) Name() string { return r.name }
+func (r *concatenation) SetName(name string) Rule {
+	r.name = name
+	return r
 }

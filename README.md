@@ -250,10 +250,10 @@ Z 不能识别语义的文本被当做占位文本处理.
 注意逗号和分号的不同.
 
 ```
-var int x,y = 3+1,6	逗号分隔多个同类型变量
-var [int] = [1,2]	逗号分隔值表达式
+var int x,y = 3+1,6		逗号分隔多个同类型变量
+var array[int] = [1,2]	逗号分隔值表达式
 var (
-	int i;string s	分号分隔一行中多个声明
+	int i;string s		分号分隔一行中多个声明
 )
 
 proc each [
@@ -371,7 +371,7 @@ type T [
 	int x
 ]
 
-var [int] x,
+var array[int] x,
 	y = [0]
 
 var empty e,
@@ -559,9 +559,9 @@ var datetime(
 array 表示数组类型.
 
 ```
-var array[int] ai	以保留字 array 开头
-var [int] a			可以省略 array 方便录入
-var [int] (			分组写法
+var array[int] ai	以 array 开头声明数组
+
+var array[int] (	分组写法
 	c
 	d = [			赋初值就直接写吧
 		1,2,3,
@@ -570,46 +570,45 @@ var [int] (			分组写法
 )
 
 访问数组元素
-var int e = d[0]	下标访问
+var int e = ai[0]	下标访问
 
-多维数组用嵌套中括号
+多维数组
 
-var [[int]] point =[
+var array[array[int]] point =[
 		[1,2,3]
 	]
 
 定长数组
 
-var [int,5] seq
+var array[5,int] seq
 
 type Seq {
-	array[int,5]	匿名属性定长数组必须用 array
+	array[int]		匿名属性数组
 }
 
-var [Seq,5] seqs
+var array[5,Seq] seqs
 ```
 
 
 ##映射
 
-映射具有 key-value 结构, key 和 value 的具体类型有使用者定以.
+使用 map[keyType,valueType] 声明映射类型.
 
 ```
 给 map 赋值可以使用 JSON 风格, Z 编译器会检查值的合法性
-var map[string]int m = {
+var map[string,int] m = {
 	'age': 13,
 	"height": 156		有换行的话可以省略逗号
 	"id": 1
 }
 
-key 和 value 可以是任意类型
-var map[type]string types = [	万能的方括号
+key 和 value 可以是任意类型, 甚至使用 type
+var map[type,string] types = [	万能的方括号
 	string: 'string',
 	int: 'integer'
 ]
 
-甚至可以使用 type
-var map[type]type assoc = [
+var map[type,type] assoc = [
 	string: types,
 	int: f32
 ]
@@ -785,7 +784,7 @@ for maps as key val {
 }
 
 遍历立即定义的映射需要声明类型
-for map[string]int{'a':1,'b':2} as key intVal {
+for map[string, int]('a':1,'b':2) as key intVal {
 }
 
 遍历类型成员
@@ -812,12 +811,12 @@ for f as memberName typ {
 循环, 分支与 is, isnot 运算符的使用:
 
 ```
-var map[type]string types ={
+var map[type,string] types ={
 	string: 'string',
 	int: 'integer'
 }
 
-var map[type]type assoc ={
+var map[type,type] assoc ={
 	string: types,
 	int: f32
 }
@@ -994,15 +993,28 @@ func toString out string
 
 func toInt string out int
 
+---
+因为 func 声明中不允许出现逗号, 所以参数不能是函数类型.
+func callToInt func string out int
+这会产生二义性.
+---
+
+只能这样声明 callToInt
+func callToInt toInt
+
+这意味着函数或过程声明同时也是类型声明.
+
 proc toString out string s [
-	保留字 proc 声明带执行体的过程
+	保留字 proc 声明带执行体的过程, 必须声明过程名
+	除了唯一的 out 参数名外, 其它参数必须声明参数名和类型
 	s = 'hello' - s
 	end		end 终止过程
 ]
 
 pub proc walk func callback int out int, out bool [
-	这个过程有两个参数, 第一个参数是个函数类型
-	显然 func 参数无逗号的设计显现出作用
+	过程声明的参数间用逗号分隔, 该过程有两个参数.
+	显然过程参数可以是函数, 这是也是 func 参数无逗号的原因.
+	唯一的一个 out 参数可以省略参数名, 那表示用 out 替代.
 ]
 
 使用函数变量
@@ -1097,6 +1109,7 @@ proc y {
 4. 参数都有零值或缺省值,  null 是通用的零值.
 5. 调用过程不必传递所有参数.
 6. 过程体中 out 既可以替代输出参数, 也可以用作返回语句
+7. 函数或者过程声明也是类型声明.
 
 ```
 proc one out int [		省略唯一的输出参数名
