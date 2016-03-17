@@ -19,7 +19,7 @@ type Rule interface {
 	//
 	// 返回值为下列之一:
 	//
-	//  0
+	//	0
 	// 	Matched
 	// 	Matched|Standing
 	// 	Matched|Finished
@@ -27,14 +27,20 @@ type Rule interface {
 	//
 	// 自动重置:
 	//
-	// 当状态为 0, Finished, Matched|Finished 的规则自动重置, 可接受新的匹配.
+	// 规则状态为 0, Finished, Matched|Finished 时自动重置, 可接受新的匹配.
 	//
 	// EOF 重置: 当最终状态为
 	//
-	//	Matched 最终状态是不完整匹配.
+	//	Matched 最终状态是不确定完整匹配.
 	//	Matched|Standing 最终状态是完整匹配.
 	//
 	// 时使用 Match(EOF) 重置规则并返回 Finished, 其它状态不应该使用 EOF 来重置.
+	//
+	// 末尾完整测试:
+	//
+	// 类似 Seq(Term(XX),Option(YY),Option(ZZ)) 规则, 单个 XX 也是合法的,
+	// 但是由于 Option 的原因, 匹配单个 XX 的状态为 Matched,
+	// 因此再匹配一个不可能出现的 Token, 可以测试规则是否完整.
 	//
 	Match(tok Token) Flag
 
@@ -45,6 +51,10 @@ type Rule interface {
 	// Clone 返回克隆规则, 这是深度克隆, 但不含递归.
 	// 递归规则在 Match 中通过判断 Handing 标记及时建立的.
 	Clone() Rule
+
+	// IsOption 返回该规则是否为可选规则.
+	// 事实上除了 Option 是明确的可选规则外, 其它组合可能产生事实上的可选规则.
+	IsOption() bool
 }
 
 // Flag 表示规则匹配 Token 后的状态
@@ -57,6 +67,7 @@ const (
 
 	// 下列标记由算法维护, Match 返回值不应该包含这些标记.
 	Handing // 正在进行处理中(Match), 可用来检查发生递归
+	Cloning // 正在进行克隆
 	Custom  // 通用标记位, 包括更高的位都由 Match 自定义用途,
 
 	// 短标记
@@ -75,22 +86,6 @@ func (f Flag) Has(flag Flag) bool {
 // Must 返回 f&flag == flag
 func (f Flag) Must(flag Flag) bool {
 	return f&flag == flag
-}
-
-// end 在结束匹配时调用, 综合计算 f 和 flag, 返回值为:
-//
-//	0
-//	Matched
-//	Finished
-//	Matched | Finished
-//
-func (f Flag) end(flag Flag) Flag {
-	flag = f&6 | flag&7
-	if flag.Has(Standing) {
-		flag |= Finished
-		flag ^= Standing
-	}
-	return flag
 }
 
 func (f Flag) String() (s string) {
@@ -118,6 +113,7 @@ type term struct {
 //
 //	0
 //	Matched | Finished
+//	Finished	当 EOF 重置或者 tok == nil
 //
 func Term(tok ...Token) Rule {
 	return term{tok}
@@ -126,12 +122,19 @@ func Term(tok ...Token) Rule {
 func (r term) Bind(Rule)   { panic("not support") }
 func (r term) Clone() Rule { return r }
 func (r term) Match(tok Token) Flag {
+	if tok == eof || r.toks == nil {
+		return Finished
+	}
 	for _, t := range r.toks {
 		if t.Has(tok) {
 			return Matched | Finished
 		}
 	}
 	return 0
+}
+
+func (r term) IsOption() bool {
+	return r.toks == nil
 }
 
 // base 维护 Flag 和递归 next.
@@ -141,6 +144,10 @@ type base struct {
 }
 
 func (b *base) match(r Rule, tok Token) Flag {
+	if tok == eof && b.next == nil {
+		b.Flag = 0
+		return Finished
+	}
 	if b.next == nil {
 		b.next = r.Clone()
 	}
@@ -165,9 +172,18 @@ func Option(rule Rule) Rule {
 	return &option{rule: rule}
 }
 
+func (r *option) IsOption() bool {
+	return true
+}
+
 func (r *option) Bind(rule Rule) { r.rule = rule }
 func (r *option) Clone() (c Rule) {
+	if r.Has(Cloning) {
+		return r
+	}
+	r.Flag += Cloning
 	c = Option(r.rule.Clone())
+	r.Flag -= Cloning
 	return
 }
 
@@ -182,7 +198,9 @@ func (r *option) Match(tok Token) (flag Flag) {
 
 	switch flag {
 	case 0:
-		flag = r.Flag.end(0)
+		if r.Flag == 0 || r.Flag.Has(Standing) {
+			flag = Finished
+		}
 		r.Flag = 0
 	case Matched, Matched | Standing:
 		r.Flag = flag
@@ -206,6 +224,10 @@ type once struct {
 //
 func Once(rule Rule) Rule {
 	return &once{rule: rule}
+}
+
+func (r *once) IsOption() bool {
+	return r.rule.IsOption()
 }
 
 func (r *once) Bind(rule Rule) { r.rule = rule }
@@ -238,7 +260,6 @@ func (r *once) Match(tok Token) (flag Flag) {
 	return
 }
 
-// more 的实现方法可能会改变, 不导出
 type more struct {
 	rule Rule
 	base
@@ -247,34 +268,36 @@ type more struct {
 
 // More 产生重复匹配规则.
 // rule 必须初次匹配成功, 然后当 rule 匹配结果为 0, Finished 时尝试 sep 匹配,
-// 如果 sep 匹配成功可继续匹配 rule.
-// 如果 sep 为 nil, 可重复匹配 rule.
+// 如果 sep 匹配成功则继续匹配 rule.
 //
 func More(rule, sep Rule) Rule {
+	if sep == nil {
+		sep = Term()
+	}
 	return &more{rule: rule, sep: sep}
+}
+
+func (r *more) IsOption() bool {
+	return false
 }
 
 func (r *more) Bind(rule Rule) { r.rule = rule }
 func (r *more) Clone() (c Rule) {
-	if r.sep != nil {
-		c = More(r.rule.Clone(), r.sep.Clone())
-	} else {
-		c = More(r.rule.Clone(), nil)
+	if r.Has(Cloning) {
+		return r
 	}
-	return
+	r.Flag += Cloning
+	c = More(r.rule.Clone(), r.sep.Clone())
+	r.Flag -= Cloning
+	return c
 }
 
 // matchSep 匹配 sep, 调用条件 r.has(Finished)
 func (r *more) matchSep(tok Token) (flag Flag) {
 	const (
-		sepMatched  = Custom
-		sepStanding = Custom << 1
+		sepMatched = Custom
 	)
-	if r.sep == nil {
-		flag = Finished
-	} else {
-		flag = r.sep.Match(tok)
-	}
+	flag = r.sep.Match(tok)
 
 	if tok == eof {
 		r.eof()
@@ -283,58 +306,41 @@ func (r *more) matchSep(tok Token) (flag Flag) {
 
 	switch flag {
 	case 0:
-		if !r.Has(sepMatched) {
+		if r.Has(Standing) {
 			flag = Finished
 		}
-		r.Flag -= Finished
-
 	case Matched: // 需要更多 Token
-		r.Flag |= sepMatched
+		r.Flag = Finished | sepMatched
 
 	case Matched | Standing:
-		r.Flag |= sepStanding
-		if r.Has(sepMatched) {
-			r.Flag -= sepMatched
-		}
-
+		flag = Matched
+		r.Flag = Finished | sepMatched
 	case Matched | Finished:
-		r.Flag -= Finished
-		flag = Matched | Standing
-		if r.Has(sepStanding) {
-			r.Flag -= sepStanding
-		}
+		flag = Matched
+		r.Flag = Standing
 
 	case Finished:
-		r.Flag -= Finished
-		if r.Has(sepStanding) {
-			r.Flag -= sepStanding
-		}
-		if r.Has(sepMatched) {
-			r.Flag -= sepMatched
-		}
 	}
 
 	return
 }
 
 func (r *more) Match(tok Token) (flag Flag) {
-
+	var sep bool
 	if r.Has(Handing) {
 		return r.match(r, tok)
 	}
 	r.Flag |= Handing
 
-	if r.Has(Finished) {
+	if r.Has(Custom) { // Custom 标记表示 sep 匹配中
+		sep = true
 		flag = r.matchSep(tok)
-		if tok == eof {
-			r.eof()
+		if flag == 0 || tok == eof {
+			r.Flag = 0
 			return
 		}
 		if flag != Finished {
-			if r.Flag == Handing || flag.Has(Matched) {
-				r.Flag -= Handing
-				return
-			}
+			return
 		}
 	}
 
@@ -342,43 +348,53 @@ func (r *more) Match(tok Token) (flag Flag) {
 
 	if tok == eof {
 		r.matchSep(eof)
-		r.eof()
 		return
 	}
 
+	// 从 rule 直接进入 sep 匹配必须具一定条件
+	if !sep && (flag == 0 && r.Has(Standing) || flag == Finished) {
+		sep = true
+		flag = r.matchSep(tok)
+		if flag == 0 { // 结束
+			if r.Has(Standing) {
+				flag = Finished
+			}
+			r.Flag = 0
+			return
+		}
+		if flag != Finished { // sep 需要继续匹配
+			return
+		}
+		// 无 sep , 纯 rule 重复, rule 应该已经被重置
+		flag = r.rule.Match(tok)
+	}
+
+	// 这里全都是 rule 的结果
 	switch flag {
 	case 0:
-		if !r.Has(Standing) {
-			r.Flag = Handing
-			break
-		}
-		r.Flag |= Finished
-
-		flag = r.matchSep(tok)
-		if !flag.Has(Matched) {
-			r.Flag = Handing
+		if sep || r.Has(Standing|Finished) {
 			flag = Finished
 		}
+		r.Flag = 0
+		r.rule.Match(eof)
 
 	case Matched, Matched | Standing:
-		r.Flag = r.Flag&0xf8 | flag
-	case Matched | Finished:
-		r.Flag = r.Flag&0xf8 | Finished | Standing
-		flag = Matched | Standing
-	case Finished:
-		r.Flag = r.Flag&0xf8 | Finished | Standing
-		flag = r.matchSep(tok)
+		r.Flag = r.Flag&0xf8 | flag&0x6
 
-		if !flag.Has(Matched) {
-			r.Flag = Handing
-			flag = Finished
-		}
+	case Matched | Finished:
+		r.Flag = r.Flag&0xf8 | Standing
+		flag = Matched | Standing
+
+	case Finished:
+		r.Flag = 0
 	}
-	r.Flag -= Handing
+
+	if r.Has(Handing) {
+		r.Flag -= Handing
+	}
 	return
 }
 
-// alternative 规则, 最多吃掉一个 Token
 type alternative struct {
 	rules []Rule
 	base
@@ -386,8 +402,18 @@ type alternative struct {
 }
 
 // Any 产生任一匹配规则.
+// 不要用 Any(rule, Term()) 替代 Option, 那会让 IsOption() 不可靠.
 func Any(rule ...Rule) Rule {
 	return &alternative{rules: rule}
+}
+
+func (r *alternative) IsOption() bool {
+	for _, rule := range r.rules {
+		if !rule.IsOption() {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *alternative) Bind(rule Rule) {
@@ -402,11 +428,17 @@ func (r *alternative) Bind(rule Rule) {
 }
 
 func (c *alternative) Clone() Rule {
+	if c.Has(Cloning) {
+		return c
+	}
+	c.Flag += Cloning
+
 	r := &alternative{}
 	r.rules = make([]Rule, len(c.rules))
 	for i := 0; i < len(r.rules); i++ {
 		r.rules[i] = c.rules[i].Clone()
 	}
+	c.Flag -= Cloning
 	return r
 }
 
@@ -419,7 +451,6 @@ func (r *alternative) Match(tok Token) (flag Flag) {
 		r.pos = 0
 	}
 	r.Flag += Handing
-
 	for r.pos < len(r.rules) {
 		flag = r.rules[r.pos].Match(tok)
 		if tok == eof {
@@ -441,8 +472,14 @@ func (r *alternative) Match(tok Token) (flag Flag) {
 			r.pos = len(r.rules)
 		case Finished:
 			if r.Has(Matched) {
-				r.pos = len(r.rules)
+				r.Flag = Handing
+				break
 			}
+			r.pos++
+			if r.pos == len(r.rules) {
+				r.Flag = Handing
+			}
+			continue
 			r.Flag = Handing
 		}
 
@@ -455,16 +492,29 @@ func (r *alternative) Match(tok Token) (flag Flag) {
 	return
 }
 
-// concatenation
 type concatenation struct {
 	rules []Rule
 	base
-	pos int
+	opt, pos int
 }
 
 // Seq 产生顺序匹配规则
 func Seq(rule ...Rule) Rule {
-	return &concatenation{rules: rule}
+
+	r := &concatenation{rules: rule}
+	r.opt = len(r.rules)
+	for i := len(r.rules) - 1; i >= 0; i-- {
+		if r.rules[i].IsOption() {
+			r.opt = i
+		} else {
+			break
+		}
+	}
+	return r
+}
+
+func (r *concatenation) IsOption() bool {
+	return false
 }
 
 func (r *concatenation) Bind(rule Rule) {
@@ -473,17 +523,29 @@ func (r *concatenation) Bind(rule Rule) {
 		panic("not support")
 	}
 	r.rules = make([]Rule, len(c.rules))
-	for i := 0; i < len(r.rules); i++ {
+	opt := true
+	r.opt = len(r.rules)
+	for i := len(r.rules) - 1; i >= 0; i-- {
 		r.rules[i] = c.rules[i]
+		if opt && r.rules[i].IsOption() {
+			r.opt = i
+		} else {
+			opt = false
+		}
 	}
 }
 
 func (c *concatenation) Clone() Rule {
-	r := &concatenation{}
+	if c.Has(Cloning) {
+		return c
+	}
+	c.Flag += Cloning
+	r := &concatenation{opt: c.opt}
 	r.rules = make([]Rule, len(c.rules))
-	for i := 0; i < len(r.rules); i++ {
+	for i := 0; i < len(c.rules); i++ {
 		r.rules[i] = c.rules[i].Clone()
 	}
+	c.Flag -= Cloning
 	return r
 }
 
@@ -503,32 +565,35 @@ func (r *concatenation) Match(tok Token) (flag Flag) {
 		flag = r.rules[r.pos].Match(tok)
 
 		if tok == eof {
-			r.pos = 0
 			r.eof()
+			r.pos = 0
 			return
 		}
 
 		switch flag {
 		case 0:
 			r.pos = 0
+			r.Flag = Handing
 		case Matched:
 		case Matched | Standing:
-			if r.pos+1 != len(r.rules) {
+			if r.pos+1 < r.opt {
 				flag = Matched
 			}
 			r.Flag = Handing | Standing
 		case Matched | Finished:
 			r.pos++
 			if r.pos != len(r.rules) {
-				flag = Matched
+				if r.pos < r.opt {
+					flag = Matched
+				} else {
+					flag = Matched | Standing
+				}
 			}
 			r.Flag = Handing
 		case Finished:
 			r.pos++
-			if r.Has(Standing) {
-				r.Flag -= Standing
-				continue
-			}
+			r.Flag = Handing
+			continue
 		}
 		break
 	}

@@ -7,6 +7,11 @@ import (
 	. "github.com/ZxxLang/zxx/token"
 )
 
+const (
+	MS = M | S
+	MF = M | F
+)
+
 func test(toks []Token, rule Rule) (i int, tok Token, flag Flag) {
 	for i, tok = range toks {
 		flag = rule.Match(tok)
@@ -17,14 +22,29 @@ func test(toks []Token, rule Rule) (i int, tok Token, flag Flag) {
 	return
 }
 
-func ts(tok ...Token) []Token {
-	return tok
+type step struct {
+	tok  Token
+	flag Flag
+}
+
+func tokens(s ...Token) []Token {
+	return s
+}
+
+func flags(s ...Flag) []Flag {
+	return s
+}
+
+func ts(toks []Token, flag []Flag) []step {
+	steps := make([]step, len(toks))
+	for i, tok := range toks {
+		steps[i] = step{tok, flag[i]}
+	}
+	return steps
 }
 
 func TestTerm(t *testing.T) {
-	toks := ts(
-		FUNC, IDENT, OUT, INT, BOOL,
-	)
+	toks := tokens(FUNC, IDENT, OUT, INT, BOOL)
 
 	i, tok, flag := test(toks, Term(toks...))
 	if flag != M|F || tok != BOOL {
@@ -32,85 +52,64 @@ func TestTerm(t *testing.T) {
 	}
 	// fatal 0
 
-	i, tok, flag = test(ts(FUNC, NAN), Term(toks...))
+	i, tok, flag = test(tokens(FUNC, NAN), Term(toks...))
 	if flag != 0 || tok != NAN {
 		t.Fatal(i, tok, flag)
+	}
+
+	flag = Term().Match(NAN) | Term().Match(EOF)
+	if flag != F {
+		t.Fatal(`want F`, flag)
 	}
 }
 
 func TestSeq(t *testing.T) {
-	toks := ts(
-		FUNC, IDENT, OUT, INT, BOOL,
-	)
-
 	rule := Seq(
 		Term(FUNC), Term(IDENT),
 		Term(OUT), Term(INT), Term(BOOL),
 	)
 
-	i, tok, flag := test(toks, rule)
-	if flag != M|F || tok != BOOL {
-		t.Fatal(i, tok, flag)
-	}
-
-	out := Seq(
-		Term(OUT),
-		Term(Type),
+	walk := ts(
+		tokens(FUNC, IDENT, OUT, INT, BOOL, NAN, EOF),
+		flags(M, M, M, M, MF, 0, F),
 	)
 
-	i, tok, flag = test(ts(OUT, INT), out)
-	if flag != M|F || tok != INT {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
-	// fatal test
+	rule = Seq(
+		Term(FUNC), Term(IDENT), Option(Term(OUT)), Option(Term(INT)),
+	)
 
-	i, tok, flag = test(ts(FUNC, IDENT), rule)
-	if flag != M || tok != IDENT {
-		t.Fatal(i, tok, flag)
-	}
+	walk = ts(
+		tokens(FUNC, IDENT, SPACES),
+		flags(M, MS, F),
+	)
 
-	rule.Match(EOF)
-
-	i, tok, flag = test(ts(FUNC, IDENT, NAN), rule)
-	if flag != 0 || tok != NAN {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
 }
 
 func TestMore(t *testing.T) {
 
-	toks := ts(INT, COMMA, BOOL, COMMA)
+	rule := More(Term(Type), Term(COMMA))
 
-	rules := []Rule{
-		More(Term(Type, COMMA), nil),
-		More(Term(Type), Term(COMMA)),
-	}
+	walk := ts(
+		tokens(INT, COMMA, BOOL, COMMA, NAN, NAN, EOF),
+		flags(MS, M, MS, M, F, 0, F),
+	)
 
-	for k, rule := range rules {
-		for j := 0; j < len(toks); j++ {
-			i, tok, flag := test(toks[0:j+1], rule)
-			if flag != M|S || tok != toks[j] {
-				t.Fatal(j, i, tok, flag)
-			}
-
-			if flag = rule.Match(NAN); flag != F {
-				t.Fatal(NAN, "want F", flag, k, toks[j])
-			}
-
-			if flag = rule.Match(NAN); flag != 0 {
-				t.Fatal(NAN, "want 0", flag, k, toks[j])
-			}
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
 		}
-	}
-
-	rule := rules[1]
-	toks = ts(INT, COMMA, BOOL, TRUE)
-	i, tok, flag := test(toks, rule)
-
-	if flag != F || tok != TRUE {
-		t.Fatal(i, tok, flag)
 	}
 
 	rule = More(
@@ -118,98 +117,246 @@ func TestMore(t *testing.T) {
 			Term(VAR),
 			Term(Type),
 		),
-		Term(COMMA),
+		Term(SEMICOLON),
 	)
 
-	toks = ts(VAR, INT, COMMA)
-	i, tok, flag = test(toks, rule)
+	walk = ts(
+		tokens(VAR, INT, SEMICOLON, VAR, INT, SEMICOLON, NAN, NAN, EOF),
+		flags(M, MS, M, M, MS, M, F, 0, F),
+	)
 
-	if flag != M|S || tok != COMMA {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
 	rule = Seq(
-		Term(OUT),
-		More(Term(Type), nil),
+		Term(Type), Term(IDENT),
+		Option(More(Seq(Term(COMMA), Term(IDENT)), nil)),
 	)
-	i, tok, flag = test(ts(OUT, INT), rule)
 
-	if flag != M|S || tok != INT {
-		t.Fatal(i, tok, flag)
+	walk = ts(
+		tokens(
+			INT, IDENT, NAN, EOF,
+		),
+		flags(
+			M, MS, F, F,
+		),
+	)
+
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
+}
 
-	// fatal test
-	rule.Match(EOF)
-	i, tok, flag = test(ts(OUT, NAN), rule)
+func TestOnce(t *testing.T) {
 
-	if flag != 0 || tok != NAN {
-		t.Fatal(i, tok, flag)
+	rule := Once(Seq(
+		Term(Type),
+		Term(COMMA),
+	))
+
+	walk := ts(
+		tokens(INT, COMMA, BOOL, EOF, BOOL, COMMA, NAN, NAN, EOF),
+		flags(M, MF, F, F, M, MF, F, F, F),
+	)
+
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
 }
 
-func TestOnce(t *testing.T) {
-	toks := ts(FUNC, IDENT, OUT, INT, BOOL)
-
-	out := Once(Seq(
-		Term(OUT),
-		Term(Type),
-	))
-
-	i, tok, flag := test(ts(OUT, INT), out)
-	if flag != M|F || tok != INT {
-		t.Fatal(i, tok, flag)
-	}
-
-	if flag = out.Match(NAN); flag != F {
-		t.Fatal("want F", flag)
-	}
-
-	out = Once(Seq(
-		Term(OUT),
-		More(Term(Type), nil),
-	))
-
-	i, tok, flag = test(ts(OUT, INT), out)
-	if flag != M|S || tok != INT {
-		t.Fatal(i, tok, flag)
-	}
-
-	rule := Seq(
-		Term(FUNC), Term(IDENT),
-		More(
-			Any(
-				Term(Type),
-				out,
-			),
-			out,
+func TestOption(t *testing.T) {
+	rule := Option(Term(IDENT))
+	walk := ts(
+		tokens(
+			USE, IDENT, NAN, EOF,
+			IDENT, IDENT, NAN, EOF,
+		),
+		flags(
+			F, MF, F, F,
+			MF, MF, F, F,
 		),
 	)
-	out.Match(EOF)
 
-	i, tok, flag = test(toks, rule)
-	if flag != M|S || tok != BOOL {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
-	rule.Match(EOF)
+	rule = Seq(
+		Term(USE), Option(Term(IDENT)),
+		Term(VALSTRING),
+	)
 
-	toks = ts(FUNC, IDENT, INT, STRING, OUT, INT, BOOL)
+	walk = ts(
+		tokens(
+			USE, IDENT, VALSTRING, NAN, EOF,
+			USE, VALSTRING, NAN, EOF,
+		),
+		flags(
+			M, M, MF, 0, F,
+			M, MF, 0, F,
+		),
+	)
 
-	i, tok, flag = test(toks, rule)
-	if flag != M|S || tok != BOOL {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
-	// fatal test
+	rule = More(Seq(
+		Term(Type), Term(IDENT),
+		Option(More(Seq(Term(COMMA), Term(IDENT)), nil)),
+	), nil)
 
-	rule.Match(EOF)
+	walk = ts(
+		tokens(
+			INT, IDENT, NAN, EOF,
+			INT, IDENT, COMMA, IDENT, NAN, EOF,
+			INT, IDENT, COMMA, IDENT,
+			INT, IDENT, COMMA, IDENT, NAN, EOF,
+		),
+		flags(
+			M, MS, F, F,
+			M, MS, M, MS, F, F,
+			M, MS, M, MS,
+			M, MS, M, MS, F, F,
+		),
+	)
 
-	toks = ts(FUNC, IDENT, OUT, INT, STRING, OUT, INT, BOOL)
-
-	i, tok, flag = test(toks, rule)
-	if i != 5 || flag != F || tok != OUT {
-		t.Fatal(i, tok, flag)
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
 	}
 
+	rule = More(
+		Seq(Term(Type), Term(IDENT)),
+		Option(More(Seq(Term(COMMA), Term(IDENT)), nil)),
+	)
+
+	walk = ts(
+		tokens(
+			INT, IDENT, NAN, EOF,
+			INT, IDENT, COMMA, IDENT, NAN, EOF,
+			INT, IDENT, COMMA, IDENT,
+			INT, IDENT, COMMA, IDENT, NAN, EOF,
+		),
+		flags(
+			M, MS, F, F,
+			M, MS, M, M, F, F,
+			M, MS, M, M,
+			M, MS, M, M, F, F,
+		),
+	)
+
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
+	}
+
+}
+
+func TestAny(t *testing.T) {
+	tmap := Seq()
+	tfunc := Seq()
+	tarray := Seq()
+
+	length := Seq(Term(COMMA), Term(VALINTEGER, Type, IDENT, MEMBER))
+
+	types := Any(
+		Term(Type, IDENT, MEMBER),
+		tmap,
+		tfunc,
+		tarray,
+	)
+
+	tarray.Bind(Seq(Term(ARRAY), Term(LEFT), types, Option(length), Term(RIGHT)))
+
+	tmap.Bind(Seq(Term(MAP), Term(LEFT), types, types, Option(length), Term(RIGHT)))
+
+	params := More(
+		Seq(
+			Option(Once(Term(OUT))),
+			types,
+			Option(Seq(
+				Term(IDENT),
+				Option(More(Seq(Term(COMMA), Term(IDENT)), nil)),
+			)),
+		),
+		Term(SEMICOLON),
+	)
+
+	tfunc.Bind(Seq(
+		Term(FUNC),
+		Option(Seq(Term(LEFT), params, Term(RIGHT))),
+	))
+
+	rule := params
+
+	walk := ts(
+		tokens(
+			INT, IDENT, SEMICOLON,
+			BOOL, IDENT, COMMA, IDENT, SEMICOLON,
+		),
+		flags(
+			MS, MS, M,
+			MS, MS, M, MS, M,
+		),
+	)
+
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
+	}
+
+	rule = params
+
+	walk = ts(
+		tokens(
+			INT, IDENT, SEMICOLON,
+			BOOL, IDENT, COMMA, IDENT, NAN,
+
+			FUNC, LEFT, IDENT, SEMICOLON,
+			BOOL, IDENT, SEMICOLON,
+			OUT, F32, SEMICOLON, F64, SEMICOLON, RIGHT, IDENT,
+		),
+		flags(
+			MS, MS, M,
+			MS, MS, M, MS, F,
+			MS, M, M, M,
+			M, M, M,
+			M, M, M, M, M, MS, MS,
+		),
+	)
+
+	for i, w := range walk {
+		if flag := rule.Match(w.tok); flag != w.flag {
+			t.Fatal(i, flag, w.tok, w.flag)
+		}
+	}
+
+	rule = Seq(
+		Term(PROC), Term(IDENT, MEMBER),
+		Option(Any(
+			Seq(
+				Term(OUT),
+				More(Seq(types, Option(Seq(Term(IDENT), Option(More(Seq(Term(COMMA), Term(IDENT)), nil))))),
+					nil),
+			),
+			More(Seq(types, Term(IDENT), Option(More(Seq(Term(COMMA), Term(IDENT)), nil))),
+				nil),
+		)),
+	)
 }
