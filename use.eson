@@ -1,0 +1,15 @@
+{
+  'name' 'zxx',
+  'license' 'BSD-2-Clause',
+  'version' '0.1602.020',
+  'repository' [
+    'git+https//github.com/ZxxLang/zxx.git'
+  ],
+  'keywords' [
+    'Zxx', 'programming', 'language'
+  ],
+  'author' {
+    'name' 'YU HengChun',
+    'url'  'https//achun.github.io/'
+  }
+}
